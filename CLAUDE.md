@@ -480,23 +480,29 @@ Verify:
 3. On the Mini, `git ls-remote git@github.com:jtarnvik/priceengine-bill-splitter.git` works — proves the Mini's
    SSH key reaches the repo before the clone in 1.6 depends on it.
 
-**1.3 The first version** — owner, dev machine
+**1.3 The first version** — owner, dev machine ✅
 - `./change-version.sh 0.1.0`, then run the push command it puts on the clipboard (commit **and** tag).
 
 Verify:
 1. `git ls-remote --tags origin` lists `v0.1.0`.
 2. `git show v0.1.0:build.just | grep jar_version` → `0.1.0` — the tag carries its own jar name.
 
-**1.4 DNS** — owner, Cloudflare dashboard
+**1.4 DNS** — owner, Cloudflare dashboard ✅
 - tarnvik.com → DNS → Records → Add record: type `CNAME`, name `pbs`, target `api2.tarnvik.com`, proxy status
   **Proxied** (orange cloud), TTL Auto. Never an A record — see Infrastructure.
 
 Verify, from the dev machine:
 1. `dig +short pbs.tarnvik.com` → Cloudflare addresses, like `dig +short api2.tarnvik.com` gives. If it answers
-   `api2.tarnvik.com.` the record is grey-clouded (DNS only); if it answers nothing, wait a minute or ask
-   Cloudflare directly with `dig +short pbs.tarnvik.com @1.1.1.1`.
-2. `curl -sI https://pbs.tarnvik.com/ping` → a Cloudflare 5xx, most likely **525**. Expected: Cloudflare now
-   reaches the Mini, but Caddy has no site for this name yet and refuses the TLS handshake.
+   `api2.tarnvik.com.` the record is grey-clouded (DNS only); if it answers nothing, ask Cloudflare's own
+   nameserver directly: `dig +short pbs.tarnvik.com @aron.ns.cloudflare.com`. *Why:* a lookup made before the
+   record existed is cached as "no such name" for up to 30 minutes (the 1800 s negative TTL in the zone's SOA),
+   so the local resolver can lag. `curl --resolve pbs.tarnvik.com:443:<address>` gets past it.
+2. `curl -s -w ' status=%{http_code} bytes=%{size_download}\n' https://pbs.tarnvik.com/ping` →
+   `status=200 bytes=0`. **An empty 200, not an error**, which is what Caddy answers for a host name it has no
+   site for: Cloudflare reached Caddy on the Mini, and the TLS handshake worked. (The plan originally predicted
+   a 525 here; the run on 2026-10-25 showed the empty 200.) Look at the body, not the status — an empty 200
+   would fool a status-only check. Had it said `ok`, the request would have reached publicbackend, meaning the
+   host name was lost somewhere on the way.
 
 **1.5 Certificate check and Caddy** — owner, on the Mini, following the manual's "Adding Another Project"
 - Check the origin certificate covers the new name: the `openssl ... -ext subjectAltName` command in the manual
@@ -510,8 +516,8 @@ Verify, from the dev machine:
 Verify:
 1. `brew services info caddy` → running.
 2. `curl -s https://api2.tarnvik.com/ping` → `ok` — the commuter app survived the restart.
-3. `curl -sI https://pbs.tarnvik.com/ping` → **502**. The step from 525 to 502 is the proof: Caddy now answers
-   for pbs.tarnvik.com, and the 502 is only that nothing listens on :8082 yet.
+3. `curl -sI https://pbs.tarnvik.com/ping` → **502**. The step from the empty 200 to 502 is the proof: Caddy now
+   has a site for pbs.tarnvik.com and forwards to :8082, and the 502 is only that nothing listens there yet.
 
 Rollback if anything misbehaves: restore the `.bak` and restart Caddy.
 
