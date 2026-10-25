@@ -470,7 +470,7 @@ Verify, on the dev machine:
 6. `git status` lists neither `deployment/pbs.env` nor `deployment/bin/`;
    `git check-ignore -v deployment/pbs.env` names the `.gitignore` rule. Stop pbs with Ctrl-C.
 
-**1.2 Publish the repository** — owner, dev machine
+**1.2 Publish the repository** — owner, dev machine ✅
 - Create `jtarnvik/priceengine-bill-splitter` on GitHub as **public**, empty (no README or licence, so the
   first push needs no merge), if it does not exist yet. Then `git push -u origin main`.
 
