@@ -47,10 +47,12 @@ dashboard. Each exists there because of a separate frontend origin or a database
 
 ## Status
 
-**Phase 1 in progress.** The project is generated (Spring Initializr, Boot 4.1.2, Java 25) and builds with
-checkstyle; nothing beyond that is built yet. The design below was worked out in one discussion (October 2026)
-before the repository existed. Treat it as decided unless a step proves it wrong, and "Phases, in order" as the
-plan. Remove planning text from this file as it is carried out, keeping the "why" notes.
+**Phase 1 done (2026-10-25); phase 2 next, and it needs its step plan first.** pbs `v0.1.1` runs on the Mini
+and answers `/ping` at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
+log collected by the log-retention stack; the Google OAuth client exists for phase 3. The app itself is still
+only `/ping`. The design below was worked out in one discussion (October 2026) before the repository existed.
+Treat it as decided unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text
+from this file as it is carried out, keeping the "why" notes.
 
 **Base structure before functionality.** The first three phases build and prove the frame — infrastructure,
 a two-page shell, login — and contain no receipt, split or Claude code at all. Nothing functional starts until
@@ -120,6 +122,15 @@ What pbs itself must get right:
   A record would be left with the old IP after the next WAN IP change and fail silently.
 - **`server.forward-headers-strategy=native`** in `production`. Caddy forwards plain HTTP; without this Spring
   builds an `http://` OAuth2 redirect URI and Google rejects it.
+- **`server.address=127.0.0.1`** in `production` — a deliberate difference from publicbackend. Caddy is the only
+  legitimate client. Bound to all interfaces, anything on the LAN could reach :8082 directly and skip
+  Cloudflare; and since Tomcat trusts `X-Forwarded-*` headers from private-network addresses by default, it
+  could also claim to be HTTPS. For the same reason Caddy's block says `127.0.0.1:8082`, not `localhost`, which
+  can resolve to `::1`.
+- **A host name Caddy has no block for gets an empty HTTP 200**, not an error: the wildcard origin certificate
+  still completes the handshake. So a status code alone does not prove a request reached pbs — look for the
+  `ok` body. The UptimeRobot monitor checks only the status (keyword monitors need a paid plan), so a Caddyfile
+  that loses pbs's block shows as Up.
 - **Cloudflare abandons a response after 100 seconds (524).** A receipt parse takes perhaps 10–30 s, so a
   synchronous request is fine. The SSE stream relies on its heartbeat (see Live updates).
 - **Caddy flushes `text/event-stream` immediately** — no proxy configuration is needed for SSE. Cloudflare
@@ -138,6 +149,8 @@ What pbs itself must get right:
     first; check the manual's "What a service must do to be collected" before turning one on.
   - **Every entry starts with a timestamp.** Lines without one, such as stack-trace lines, are attached to the
     entry before them, which is how a stack trace stays one entry. Boot does this already.
+
+  The newest lines can reach Grafana late — see "After the project". Nothing is lost.
 
 ## Authentication
 
@@ -217,23 +230,31 @@ explicitly.
 
 ## Deployment
 
-Same `just` flow as publicbackend. Copy and rename its `change-version.sh`, `build.just.template` (with the
-`maven-antrun-plugin` execution that generates `build.just`), the root `justfile` and
-`deployment/start-publicbackend.sh`. Read publicbackend's `CLAUDE.md` "Deployment" for the reasoning, especially
-why `just doit` runs `just` again for each step.
+Same `just` flow as publicbackend: `change-version.sh`, `build.just.template` (with the `maven-antrun-plugin`
+execution that generates `build.just`), the root `justfile` and `deployment/start-pbs.sh` are renamed copies of
+its files. Read publicbackend's `CLAUDE.md` "Deployment" for the reasoning, especially why `just doit` runs
+`just` again for each step.
 
-- Tag-driven: `./change-version.sh <version>` on the dev machine, push the commit **and** the tag, then
-  `just pull`, `just build`, `just start` (or `just doit`) on the Mini.
+- Tag-driven: `./change-version.sh <version>` on the dev machine, push the commit **and** the tag, then Ctrl-C
+  the running pbs and `just doit` on the Mini. That leaves the clone on the tag in detached HEAD, as expected.
+  The deploy worked when the startup log says `Starting PbsApplication v<version>` and `deployment/bin/` holds
+  `Version-<version>.txt`.
+- **The antrun copy is `failonerror="true"`.** publicbackend's `false` is a Render leftover; a failed copy must
+  stop `change-version.sh`, not leave a tag without its `build.just`.
+- **The production clone sits next to publicbackend's, in a folder with the repository's name.** The manual's
+  log-retention table names that path, and Docker only sees the folders it shares.
 - **`just build` shrinks to `mvn verify`** plus copying into `deployment/bin` — the frontend is built inside
   Maven, so there is no separate frontend recipe.
 - Run directory `deployment/bin`, so `mvn clean` cannot delete the jar from under a running instance.
 - Profile `production`, set by the start script. Deployment-only behaviour is gated positively on it, as in
   publicbackend.
 - Secrets in `deployment/pbs.env` on the Mini (gitignored, `chmod 600`), copied from a committed
-  `deployment/pbs.env.example`.
+  `deployment/pbs.env.example`. The example lists every variable from the start, each marked with the phase
+  that begins reading it, so the file on the Mini is written once. The Google values are filled in; the
+  Anthropic key waits for phase 4.
 - Heap: `JAVA_OPTS=-Xmx512m`. The Mini also runs publicbackend (`-Xmx2g`), overlord and MySQL.
 - Runs in a foreground terminal, like publicbackend. UptimeRobot on `/ping` is the only thing that will report it
-  down.
+  down; its Down and Up alerts were tested once, on purpose.
 
 ### Environment variables
 
@@ -428,194 +449,12 @@ Each phase is small and ends in something that can be seen working **in producti
 The frame is built and proven first, because infrastructure and auth are the parts most likely to surprise, and
 a surprise there is cheapest when no feature depends on the frame yet.
 
-**Phase 1 - Infrastructure and communication.** Everything between the internet and a running jar, with the app
-itself reduced to `/ping`.
-- Spring Boot 4.1 / Java 25 project answering `/ping` on :8082, profile `production`, with
-  `forward-headers-strategy=native`.
-- The `just` files, `change-version.sh`, the start script and `deployment/pbs.env.example` — the full tag-driven
-  deploy flow, run once for real.
-- The infrastructure steps in the manual's "pbs Setup Checklist": Cloudflare CNAME, certificate check, Caddy
-  block, UptimeRobot. Create the Google OAuth client now as well, so phase 3 only consumes it.
-- Done when `https://pbs.tarnvik.com/ping` answers from off the machine, and a second tagged version has been
-  deployed the same way — proving the flow repeats, not only that it ran once.
-
-#### Phase 1 — step by step
-
-Steps 1.4, 1.5 and 1.9 do not depend on the code and can be done while 1.1 is being written. The order below
-is the one in which each check builds on the previous: DNS, then Caddy, then the app, so that when something
-fails, the last step taken is the suspect.
-
-**1.1 The app and its deploy files** — Claude ✅
-- `HealthController` (`port.incoming.rest`): `GET /ping` → `ok`, as in publicbackend, with a `@WebMvcTest`.
-- `server.port=8082` in `application.properties`, so every profile binds it.
-- `application-production.properties`: banner off, file logging to `${FOLDER_BASE}/logs/pbs.log`,
-  `server.forward-headers-strategy=native`, and **`server.address=127.0.0.1`** — a deliberate difference from
-  publicbackend. Caddy is the only legitimate client. Bound to all interfaces, anything on the LAN could reach
-  :8082 directly and skip Cloudflare; and since Tomcat trusts `X-Forwarded-*` headers from private-network
-  addresses by default, it could also claim to be HTTPS. Binding to localhost removes both.
-- `logback-spring.xml`: console always, file as well under `production` (publicbackend's, minus the dashboard).
-  Boot's own appenders and default pattern, untouched — the log-retention stack parses that exact line (see
-  Infrastructure).
-- `justfile`, `build.just.template` with the `maven-antrun-plugin` execution, `change-version.sh`,
-  `deployment/start-pbs.sh`, `deployment/pbs.env.example` with all five variables (the ones not read yet are
-  marked with the phase that starts using them, so the env file on the Mini is written once). The antrun copy
-  gets `failonerror="true"` — publicbackend's `false` is a Render leftover its own `CLAUDE.md` suggests fixing.
-- `.gitignore`: `release/`, `deployment/bin/`, `deployment/logs/`, `deployment/*.env`,
-  `pom.xml.versionsBackup`, `application-local.properties`.
-
-Verify, on the dev machine:
-1. `mvn verify` → `BUILD SUCCESS`.
-2. `cp deployment/pbs.env.example deployment/pbs.env` — empty values are fine, nothing reads them in phase 1.
-3. `just build`, then `just start` → the log shows `"production"` as the active profile and Tomcat on port 8082.
-4. In a second terminal: `curl -s localhost:8082/ping` → `ok`, and `just logs` shows the same lines as the
-   console.
-5. `curl -s http://<dev machine's LAN IP>:8082/ping` → connection refused (the localhost binding).
-6. `git status` lists neither `deployment/pbs.env` nor `deployment/bin/`;
-   `git check-ignore -v deployment/pbs.env` names the `.gitignore` rule. Stop pbs with Ctrl-C.
-
-**1.2 Publish the repository** — owner, dev machine ✅
-- Create `jtarnvik/priceengine-bill-splitter` on GitHub as **public**, empty (no README or licence, so the
-  first push needs no merge), if it does not exist yet. Then `git push -u origin main`.
-
-Verify:
-1. `git ls-files` contains nothing secret — no `.env`, no `application-local.properties`.
-2. `git ls-remote origin` lists `refs/heads/main`.
-3. On the Mini, `git ls-remote git@github.com:jtarnvik/priceengine-bill-splitter.git` works — proves the Mini's
-   SSH key reaches the repo before the clone in 1.6 depends on it.
-
-**1.3 The first version** — owner, dev machine ✅
-- `./change-version.sh 0.1.0`, then run the push command it puts on the clipboard (commit **and** tag).
-
-Verify:
-1. `git ls-remote --tags origin` lists `v0.1.0`.
-2. `git show v0.1.0:build.just | grep jar_version` → `0.1.0` — the tag carries its own jar name.
-
-**1.4 DNS** — owner, Cloudflare dashboard ✅
-- tarnvik.com → DNS → Records → Add record: type `CNAME`, name `pbs`, target `api2.tarnvik.com`, proxy status
-  **Proxied** (orange cloud), TTL Auto. Never an A record — see Infrastructure.
-
-Verify, from the dev machine:
-1. `dig +short pbs.tarnvik.com` → Cloudflare addresses, like `dig +short api2.tarnvik.com` gives. If it answers
-   `api2.tarnvik.com.` the record is grey-clouded (DNS only); if it answers nothing, ask Cloudflare's own
-   nameserver directly: `dig +short pbs.tarnvik.com @aron.ns.cloudflare.com`. *Why:* a lookup made before the
-   record existed is cached as "no such name" for up to 30 minutes (the 1800 s negative TTL in the zone's SOA),
-   so the local resolver can lag. `curl --resolve pbs.tarnvik.com:443:<address>` gets past it.
-2. `curl -s -w ' status=%{http_code} bytes=%{size_download}\n' https://pbs.tarnvik.com/ping` →
-   `status=200 bytes=0`. **An empty 200, not an error**, which is what Caddy answers for a host name it has no
-   site for: Cloudflare reached Caddy on the Mini, and the TLS handshake worked. (The plan originally predicted
-   a 525 here; the run on 2026-10-25 showed the empty 200.) Look at the body, not the status — an empty 200
-   would fool a status-only check. Had it said `ok`, the request would have reached publicbackend, meaning the
-   host name was lost somewhere on the way.
-
-**1.5 Certificate check and Caddy** — owner, on the Mini, following the manual's "Adding Another Project" ✅
-- Check the origin certificate covers the new name: the `openssl ... -ext subjectAltName` command in the manual
-  must list `*.tarnvik.com`. If it does not, stop here — that needs a new certificate, and a discussion.
-- Copy the Caddyfile to a `.bak` next to it, then add the pbs block (already written out in the manual under
-  "Caddy Reverse Proxy").
-- `caddy validate --config <the Caddyfile>` **before** restarting. Caddy also serves api2, so a typo would take
-  the commuter app down with it. A failure about reading the key file is permissions, not the edit.
-- `brew services restart caddy`.
-
-Verify:
-1. `brew services info caddy` → running.
-2. `curl -s https://api2.tarnvik.com/ping` → `ok` — the commuter app survived the restart.
-3. `curl -sI https://pbs.tarnvik.com/ping` → **502**. The step from the empty 200 to 502 is the proof: Caddy now
-   has a site for pbs.tarnvik.com and forwards to :8082, and the 502 is only that nothing listens there yet.
-
-Rollback if anything misbehaves: restore the `.bak` and restart Caddy.
-
-**1.6 First deploy** — owner, on the Mini ✅
-- Next to publicbackend's production clone: `git clone git@github.com:jtarnvik/priceengine-bill-splitter.git`,
-  `cd` into it. Keep that location and the repository's name for the folder: the manual's log-retention services
-  table already expects the log there, and Docker can only see folders it shares.
-- `java -version` and `mvn -v` → both 25. `.java-version` should make jenv pick it, as for publicbackend.
-- `cp deployment/pbs.env.example deployment/pbs.env`, `chmod 600 deployment/pbs.env`. Empty values are fine
-  for now; 1.9 fills in the Google ones.
-- `just doit` — leaves the clone on `v0.1.0` in detached HEAD, which is expected, and pbs running in the
-  foreground. Give it its own terminal tab next to publicbackend's.
-
-Verify, on the Mini:
-1. The startup log shows `Starting PbsApplication v0.1.0 using Java 25`, profile `"production"`, port 8082.
-2. `curl -s localhost:8082/ping` → `ok`.
-3. `ls -l deployment/pbs.env` → `-rw-------`.
-
-**1.6a Join log retention** — owner, on the Mini, right after 1.6 ✅ (with the stack's lag deferred)
-Needs 1.6 because pbs must have written its log folder first; if Docker is pointed at a folder that does not
-exist, it creates an empty one in its place.
-- Confirm the real log path: `ls <clone>/deployment/logs/pbs.log`. If it differs from the path in the manual's
-  log-retention services table, correct the table first, then use the real path below.
-- Follow the manual's "Log retention → Adding a service": the volume line in `docker-compose.yml`, the block in
-  `alloy/config.alloy`, then `docker compose up -d`. Service label `pbs`, service id `pbs`, and the existing
-  parser `sl_dashboard` (same format as publicbackend) — no new parser block.
-- Do it soon after 1.6. Alloy imports the current file on first read, but lines more than about three hours old
-  only show in Grafana once Loki flushes them, which can take another half hour.
-
-Verify, on the Mini (Grafana and the Alloy UI addresses are in the manual):
-1. `docker compose logs alloy | grep "start tailing"` lists `pbs.log`.
-2. The Alloy UI shows `loki.source.file.pbs` as healthy.
-3. Grafana → Explore → Loki, code editor: `{service="pbs"}` shows `Starting PbsApplication v0.1.0` with
-   `level="INFO"`.
-4. Live: with that query on *Live*, Ctrl-C pbs and `just start` again. The shutdown and startup lines appear
-   within seconds. Then `curl -s localhost:8082/ping` once, and the three `Initializing … DispatcherServlet`
-   lines appear. *Only the first request after a start logs anything;* a second curl adds nothing, and neither
-   would a curl without the restart, since 1.6 already made the first request.
-
-**1.6a outcome, 2026-10-25.** Verify 1–3 passed, including thread names with dots. Verify 4 passed only
-eventually: every line reaches Grafana, but the startup lines took about three hours. The cause is in the
-log-retention stack, not in pbs, and affects every service on it — see "After the project" at the end of this
-file. pbs's side (the file, its format, the Alloy block) is done; the stack's lag is deferred.
-
-**1.7 End to end** — owner ✅
-Verify:
-1. From the dev machine: `curl -si https://pbs.tarnvik.com/ping` → `HTTP/2 200`, `server: cloudflare`, body `ok`.
-2. From the phone with **Wi-Fi off**: `https://pbs.tarnvik.com/ping` shows `ok`. This is the off-network test;
-   the dev machine shares the Mini's network.
-3. From the dev machine: `curl -s http://<the Mini's LAN IP>:8082/ping` → connection refused.
-
-**1.8 Monitoring** — owner, UptimeRobot ✅
-- New HTTP(s) monitor on `https://pbs.tarnvik.com/ping`, with the same interval and alert contacts as the api2
-  monitor.
-- *Known blind spot:* it checks the status code only. A Caddy that has lost its pbs block answers an empty 200
-  (see 1.4), which this monitor counts as Up. A keyword monitor on `ok` would catch it, but needs a paid plan.
-
-Verify:
-1. The monitor turns Up.
-2. Once, deliberately: stop pbs (Ctrl-C), wait for the Down alert to actually arrive, then `just start` and wait
-   for Up. UptimeRobot is the only thing that will report pbs down, so the alert path is worth seeing work.
-
-**1.9 Google OAuth client** — owner, Google Cloud Console (used from phase 3) ✅
-- In the commuter app's project: Google Auth Platform → Clients → Create client (in the older UI: APIs &
-  Services → Credentials → Create credentials → OAuth client ID). Type *Web application*, name `pbs`, no
-  JavaScript origins, and exactly the two redirect URIs under Authentication.
-- Copy the client secret immediately; newer consoles show it only once. Put the ID and secret in
-  `deployment/pbs.env` on the Mini, along with `PBS_ALLOWED_EMAIL`. Keep them where the dev machine can get them
-  too — phase 3 needs them in the gitignored `application-local.properties`.
-- Under Audience, the project turned out to be *In production*, not in test mode. Leave it: switching to test
-  mode would lock the commuter app's users out. See Authentication for what that means for pbs.
-
-Verify:
-1. The client list shows two clients, commuter and pbs, and the commuter one's redirect URIs are unchanged.
-2. pbs's client lists exactly the two URIs, character for character. A typo here only surfaces in phase 3, as
-   Google's `redirect_uri_mismatch`.
-
-**1.10 The second version** — owner, with Claude preparing whatever is on `main` ✅
-- On the dev machine: `./change-version.sh 0.1.1` and push. Any committed change is enough; the point is the flow.
-- On the Mini: Ctrl-C the running pbs, then `just doit`.
-
-Verify:
-1. The startup log shows `v0.1.1`, and `deployment/bin/` holds `Version-0.1.1.txt`.
-2. `curl -s https://pbs.tarnvik.com/ping` from off the Mini → `ok`.
-3. In Grafana, `{service="pbs"} |= "Starting PbsApplication"` over the last day shows both the `v0.1.0` and the
-   `v0.1.1` startup lines — the logs outlive a redeploy. Until the stack's lag is fixed (see "After the
-   project"), the newest lines can take hours to arrive: check the next day if `v0.1.1` is missing.
-
-**1.11 Wrap-up** — Claude
-- Reduce this plan to what exists and why, tick the manual's "pbs Setup Checklist" (its SSE item stays open for
-  phase 2, the Anthropic key for phase 4), including "Log retention: add `pbs` as a service", remove
-  "(planned)" from pbs's row in the manual's log-retention services table, and set Status to phase 2.
-- In the manual's Caddyfile section, replace the planned pbs block with the real one:
-  `reverse_proxy 127.0.0.1:8082`, not `localhost:8082`. pbs binds IPv4 loopback only (1.1), and `localhost` can
-  also resolve to `::1`.
+**Phase 1 - Infrastructure and communication** ✅ (2026-10-25). Everything between the internet and a running
+jar, with the app itself reduced to `/ping`: the project and its deploy files, the Cloudflare CNAME, the
+certificate check, Caddy's block, the first deploy, log retention, UptimeRobot and the Google OAuth client, then
+a second tagged version (`v0.1.1`) deployed the same way to prove the flow repeats. What it established is now
+in Infrastructure, Deployment and Authentication; host-side details are in the manual. The worked step plan is
+in git history (`git log -- CLAUDE.md`), as a model for the next phase's.
 
 **Phase 2 - A two-page shell.** The one-jar build and the frontend frame, with placeholder content.
 - `frontend-maven-plugin` with pinned Node/npm, Vite output into `target/classes/static`, `mvn verify` producing
@@ -664,10 +503,10 @@ Things found along the way that belong to something other than pbs, to fix once 
 
 ### Log-retention lag — Docker Desktop's file sharing
 
-**Found in 1.6a, 2026-10-25.** Lines reach Grafana, but sometimes tens of minutes or hours late — pbs's
-startup lines took about three hours, and publicbackend's lines were more than 20 minutes behind on the same
-day. Nothing is lost. The lines hit hardest are the last ones before a service goes quiet, which are the ones
-wanted after a crash.
+**Found while joining the log-retention stack in phase 1, 2026-10-25.** Lines reach Grafana, but sometimes
+tens of minutes or hours late — pbs's startup lines took about three hours, and publicbackend's lines were more
+than 20 minutes behind on the same day. Nothing is lost. The lines hit hardest are the last ones before a
+service goes quiet, which are the ones wanted after a crash.
 
 **Cause, established by experiment.** Alloy runs in a container and reads the logs through Docker Desktop's
 file sharing. For a log file that a host process keeps open and appends to, while Alloy holds it open inside the
