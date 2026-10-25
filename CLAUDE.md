@@ -504,7 +504,7 @@ Verify, from the dev machine:
    would fool a status-only check. Had it said `ok`, the request would have reached publicbackend, meaning the
    host name was lost somewhere on the way.
 
-**1.5 Certificate check and Caddy** — owner, on the Mini, following the manual's "Adding Another Project"
+**1.5 Certificate check and Caddy** — owner, on the Mini, following the manual's "Adding Another Project" ✅
 - Check the origin certificate covers the new name: the `openssl ... -ext subjectAltName` command in the manual
   must list `*.tarnvik.com`. If it does not, stop here — that needs a new certificate, and a discussion.
 - Copy the Caddyfile to a `.bak` next to it, then add the pbs block (already written out in the manual under
@@ -601,6 +601,8 @@ Verify:
 - Reduce this plan to what exists and why, tick the manual's "pbs Setup Checklist" (its SSE item stays open for
   phase 2, the Anthropic key for phase 4), including "Log retention: add `pbs` as a service", remove
   "(planned)" from pbs's row in the manual's log-retention services table, and set Status to phase 2.
+- In the manual's Caddyfile section, replace the planned pbs block with the real one: `reverse_proxy 127.0.0.1:8082`, not
+  `localhost:8082`. pbs binds IPv4 loopback only (1.1), and `localhost` can also resolve to `::1`.
 
 **Phase 2 - A two-page shell.** The one-jar build and the frontend frame, with placeholder content.
 - `frontend-maven-plugin` with pinned Node/npm, Vite output into `target/classes/static`, `mvn verify` producing
