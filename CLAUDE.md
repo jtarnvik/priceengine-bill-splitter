@@ -582,7 +582,7 @@ Verify, on the dev machine:
 3. Ctrl-C pbs with a `curl -N` connected: it stops at once, not after 30 s. Without the `ContextClosedEvent`
    listener the log says `Graceful shutdown aborted with one or more requests still active` (tried, 2026-10-25).
 
-**2.4 The stream, frontend** — Claude
+**2.4 The stream, frontend** — Claude ✅
 - Redux store holding only the RTK Query api; the base api and `axiosBaseQuery` copied from overlord.
 - The stream as an RTK Query streaming endpoint: `onCacheEntryAdded` opens the `EventSource`, writes each event
   with `updateCachedData`, reopens it on `visibilitychange` when it is `CLOSED`, closes it when the cache entry
