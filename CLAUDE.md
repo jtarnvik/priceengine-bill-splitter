@@ -569,9 +569,11 @@ Verify:
    the dev machine shares the Mini's network.
 3. From the dev machine: `curl -s http://<the Mini's LAN IP>:8082/ping` → connection refused.
 
-**1.8 Monitoring** — owner, UptimeRobot
+**1.8 Monitoring** — owner, UptimeRobot ✅
 - New HTTP(s) monitor on `https://pbs.tarnvik.com/ping`, with the same interval and alert contacts as the api2
   monitor.
+- *Known blind spot:* it checks the status code only. A Caddy that has lost its pbs block answers an empty 200
+  (see 1.4), which this monitor counts as Up. A keyword monitor on `ok` would catch it, but needs a paid plan.
 
 Verify:
 1. The monitor turns Up.
