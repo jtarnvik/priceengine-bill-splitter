@@ -598,7 +598,7 @@ Verify:
 2. pbs's client lists exactly the two URIs, character for character. A typo here only surfaces in phase 3, as
    Google's `redirect_uri_mismatch`.
 
-**1.10 The second version** — owner, with Claude preparing whatever is on `main`
+**1.10 The second version** — owner, with Claude preparing whatever is on `main` ✅
 - On the dev machine: `./change-version.sh 0.1.1` and push. Any committed change is enough; the point is the flow.
 - On the Mini: Ctrl-C the running pbs, then `just doit`.
 
