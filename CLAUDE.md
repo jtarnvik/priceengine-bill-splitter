@@ -365,7 +365,21 @@ for the backend — copy the mechanics.
 signals and the browser refetches, which is why its `live-updates.tsx` needs throttles and a `refreshAll()` on
 every reconnect. Here the whole state is a few hundred bytes, so each event carries all of it.
 
-- **Send the current state as the first event on connect.** A reconnect is then indistinguishable from a first
+**Two named events, one per kind of change** (`event: receipt` and `event: split`; names and payloads settled in
+phase 4). Each still carries the whole of its part, so the rule above holds per event.
+- **`receipt`** — a new receipt has been parsed: the restaurant, the items, the receipt's total. Sent on upload.
+  The public page can greet it with an animation (decided later).
+- **`split`** — who had what changed: the assignments and the totals that follow from them. Sent on every tick of
+  a checkbox, and on corrections (phase 6). It carries the `receiptId`, so a phone that somehow holds an older
+  receipt ignores it rather than applying ticks to the wrong rows.
+- **The animation keys on a *new `receiptId`*, not on the `receipt` event arriving.** State-on-connect sends the
+  `receipt` event again on every reconnect, and a phone that wakes from its lock screen must not replay the
+  greeting for a receipt it has already shown.
+- *Why two events and not one:* the receipt is the large part and changes once a dinner, the split is small and
+  changes constantly, and the page reacts differently to each. Splitting by kind keeps the frequent event small
+  and makes "a new receipt arrived" something the page is told rather than has to work out.
+
+- **Send the current state as the first events on connect** — `receipt`, then `split`, when there is a receipt. A reconnect is then indistinguishable from a first
   connect, nothing on the phone ever fetches, and the response starts at once rather than idling towards
   Cloudflare's 100 s limit.
 - **Keep the heartbeat** (`: ping` every 20 s), for Cloudflare's idle timeout.
@@ -385,7 +399,8 @@ stack, so its files are the reference (see Reference implementations).
 - **The SSE stream is an RTK Query streaming endpoint.** One query whose `onCacheEntryAdded` opens the
   `EventSource` and writes each event into the cache with `updateCachedData`; both pages just call its hook.
   This is RTK Query's documented streaming pattern, and a different technique from overlord's (signal, then
-  refetch) — it fits because every event carries the whole state. The `visibilitychange` reopen lives in the
+  refetch) — it fits because every event carries the whole of its part. One cached value holds both parts, and
+  each named event has its own listener writing its own part. The `visibilitychange` reopen lives in the
   same function. The `EventSource` is plain browser API; it does not go through axios.
 - **Mutations need no tag invalidation** for the split state: the server broadcasts the new state after every
   write, and the stream updates the cache. Optimistic updates with `updateQueryData` are an option for the
@@ -542,13 +557,17 @@ Verify, with `npm run dev` (Vite on :5173):
 - An emitter registry in `port.outgoing.sse`, copied from overlord's `SseNotificationProvider` mechanics: 24 h
   emitter timeout, `: ping` comment every 20 s, dead emitters dropped on a failed send.
 - **The current state is the first event on every connection**, sent before the emitter is returned.
+- **A named event, `event: viewers`**, not an unnamed one. The real stream has two named events (see Live
+  updates), and the browser treats them differently — `onmessage` sees only unnamed events, a named one needs
+  `addEventListener` — so the dummy uses the mechanism the real ones will.
 - The viewer count is the state, an immutable record broadcast on every connect and every removal.
   `@EnableScheduling` for the heartbeat.
 - `GET /api/public/events` (`text/event-stream`) in `port.incoming.rest`.
 - A `@WebMvcTest`: the stream starts asynchronously and its first event carries the count.
 
 Verify, on the dev machine:
-1. `curl -N localhost:8082/api/public/events` prints `data:{"viewers":1}` at once, then `:ping` every 20 s.
+1. `curl -N localhost:8082/api/public/events` prints `event:viewers` and `data:{"viewers":1}` at once, then
+   `:ping` every 20 s.
 2. A second `curl -N` in another terminal: both print `{"viewers":2}`. Ctrl-C the second: within 20 s the first
    prints `{"viewers":1}` — pruning, found at the next heartbeat.
 
