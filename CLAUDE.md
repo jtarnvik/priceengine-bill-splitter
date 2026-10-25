@@ -144,8 +144,11 @@ What pbs itself must get right:
 Google OAuth2 via Spring Security, admitting exactly one Google account: the owner's.
 
 - **A separate OAuth client** in the same Google Cloud project as the commuter app, not extra redirect URIs on
-  that client — each app then has its own secret and can be revoked alone. The consent screen is per project and
-  is in test mode with the owner as a test user, which is all this app needs.
+  that client — each app then has its own secret and can be revoked alone. The consent screen is per project, and
+  the project is **in production** (the commuter app needs that), not in test mode as first assumed. So Google
+  lets any account through to pbs, and the email check below is the only gate — which is why phase 3 tests that a
+  second account is refused. The consent screen also shows the commuter app's name, not pbs's. Fine for an app
+  only the owner logs in to; a project of its own would give pbs its own name and a test-mode gate.
 - **Redirect URIs:** `https://pbs.tarnvik.com/login/oauth2/code/google` and
   `http://localhost:5173/login/oauth2/code/google` (dev, through the Vite proxy — see Development).
 - **Reject in a custom `OidcUserService`, not in the success handler.** Compare the `email` claim (and require
@@ -587,7 +590,8 @@ Verify:
 - Copy the client secret immediately; newer consoles show it only once. Put the ID and secret in
   `deployment/pbs.env` on the Mini, along with `PBS_ALLOWED_EMAIL`. Keep them where the dev machine can get them
   too — phase 3 needs them in the gitignored `application-local.properties`.
-- Under Audience, check the app is in test mode with the owner as a test user.
+- Under Audience, the project turned out to be *In production*, not in test mode. Leave it: switching to test
+  mode would lock the commuter app's users out. See Authentication for what that means for pbs.
 
 Verify:
 1. The client list shows two clients, commuter and pbs, and the commuter one's redirect URIs are unchanged.
