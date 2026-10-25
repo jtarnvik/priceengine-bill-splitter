@@ -562,7 +562,7 @@ eventually: every line reaches Grafana, but the startup lines took about three h
 log-retention stack, not in pbs, and affects every service on it — see "After the project" at the end of this
 file. pbs's side (the file, its format, the Alloy block) is done; the stack's lag is deferred.
 
-**1.7 End to end** — owner
+**1.7 End to end** — owner ✅
 Verify:
 1. From the dev machine: `curl -si https://pbs.tarnvik.com/ping` → `HTTP/2 200`, `server: cloudflare`, body `ok`.
 2. From the phone with **Wi-Fi off**: `https://pbs.tarnvik.com/ping` shows `ok`. This is the off-network test;
