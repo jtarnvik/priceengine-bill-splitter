@@ -521,7 +521,7 @@ Verify:
 
 Rollback if anything misbehaves: restore the `.bak` and restart Caddy.
 
-**1.6 First deploy** — owner, on the Mini
+**1.6 First deploy** — owner, on the Mini ✅
 - Next to publicbackend's production clone: `git clone git@github.com:jtarnvik/priceengine-bill-splitter.git`,
   `cd` into it. Keep that location and the repository's name for the folder: the manual's log-retention services
   table already expects the log there, and Docker can only see folders it shares.
@@ -556,6 +556,23 @@ Verify, on the Mini (Grafana and the Alloy UI addresses are in the manual):
    within seconds. Then `curl -s localhost:8082/ping` once, and the three `Initializing … DispatcherServlet`
    lines appear. *Only the first request after a start logs anything;* a second curl adds nothing, and neither
    would a curl without the restart, since 1.6 already made the first request.
+
+**1.6a status, 2026-10-25 — paused mid-investigation.** Edits made and applied (backups `*.bak-pbs` next to
+both files); verify 1–3 passed, including thread names with dots. Verify 4 failed: the shutdown lines of the
+old process reached Grafana within seconds, but the startup lines of the restarted process (PID 36360, line 14
+on) never did. Findings: the file on the Mini and the file seen inside the alloy container are identical (3645
+bytes, both runs present), yet Alloy's read position (`data/alloy/loki.source.file.pbs/positions.yml`) is stuck
+at 2579 — the end of the shutdown lines — with nothing logged by Alloy. Hypothesis, unproven: Alloy's tailer
+misses a file that is closed and reopened by a new host process, through Docker Desktop's file sharing.
+To resume:
+1. **Before any curl:** compare `positions.yml` with the file size. Anything reaching pbs.tarnvik.com since
+   (a bot, a scanner) makes pbs log its first request, so the experiment may already have run by itself.
+2. Experiment 1: `curl -s localhost:8082/ping` once, wait 10 s, compare position and size again. Position
+   catches up → a one-off hiccup. Position stays → the tailer is stuck on the file.
+3. Experiment 2, only if stuck: `docker compose restart alloy`, then compare again; it should resume from 2579.
+4. Open question for the owner: did publicbackend's startup lines reach Grafana after any restart since the stack
+   was set up? If every restart of every service loses its lines, it is a stack issue for the manual, not pbs's,
+   and the check in 1.10 changes.
 
 **1.7 End to end** — owner
 Verify:
