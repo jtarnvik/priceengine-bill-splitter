@@ -28,6 +28,7 @@ writing the copy, and adapt rather than reinvent.
 | `production` profile, file logging | `../publicbackend/src/main/resources/application-production.properties`, `logback-spring.xml` | 1 |
 | Checkstyle rules | `../publicbackend/src/main/resources/checkstyle.xml` | 1 |
 | ESLint config | `../sl-dashboard/eslint.config.js` | 2 |
+| Look and feel: navbar, menu, card, page wrapper, Tailwind setup | `../sl-dashboard/src/components/navbar/` (`index.tsx`, `nav-menu/`), `components/common/card/`, `components/common/view/`, `views/layout.tsx`, `src/index.css`, `postcss.config.js` | 2 |
 | SSE backend | `../cl-media/overlord/src/main/java/com/tarnvik/overlord/port/outgoing/SseNotificationProvider.java` and `port/incoming/rest/SseController.java` | 2 |
 | SSE frontend | `../cl-media/overlord/frontend/src/communication/live-updates.tsx` | 2 |
 | SSE notes | `../cl-media/sse-enterprise-gotchas.md` | 2 |
@@ -47,7 +48,7 @@ dashboard. Each exists there because of a separate frontend origin or a database
 
 ## Status
 
-**Phase 1 done (2026-10-25); phase 2 next, and it needs its step plan first.** pbs `v0.1.1` runs on the Mini
+**Phase 1 done (2026-10-25); phase 2 in progress.** pbs `v0.1.1` runs on the Mini
 and answers `/ping` at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
 log collected by the log-retention stack; the Google OAuth client exists for phase 3. The app itself is still
 only `/ping`. The design below was worked out in one discussion (October 2026) before the repository existed.
@@ -169,9 +170,9 @@ Google OAuth2 via Spring Security, admitting exactly one Google account: the own
   session is ever created for anyone else. publicbackend checks in the success handler and invalidates the session
   afterwards because it has to record pending users; with a single fixed user there is nothing to record.
 - **The allowed email comes from the environment**, never from a tracked file. The repo is public.
-- **There is no login page.** The upload page shows a "Logga in" button linking to `/oauth2/authorization/google`
-  when `/api/auth/me` answers 401. With a single provider, Spring redirects straight to Google. The success
-  handler redirects to `/#/upload`.
+- **There is no login page.** The header menu's "Logga in" item links to `/oauth2/authorization/google` when
+  `/api/auth/me` answers 401. With a single provider, Spring redirects straight to Google. The success handler
+  redirects to `/#/upload`.
 
 ### Security configuration — the two that bite
 
@@ -420,6 +421,26 @@ and later corrections.
   **initials as column headers**, **tap targets larger than the checkbox itself**, and item names that wrap or
   truncate — price and checkboxes are what matter.
 
+### Look and feel — sl-dashboard's, in green
+
+The same frame as sl-dashboard, so the owner's apps feel like one family; read its files before writing these
+(see Reference implementations). Tailwind 4 through PostCSS and Roboto, as there. **The UI is in Swedish**, as
+sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is English.
+
+- **A fixed header bar**: on the left an icon (`FaRegCreditCard` from `react-icons`, leading to `/#/`) and the
+  name "PriceEngine Bill Splitter" — possibly too long at 375 px, judged by eye on the first release; on the right
+  a hamburger button opening a white dropdown menu. The menu holds only "Logga in" to begin with.
+- **Pages**: white background, content in sl-dashboard's very slightly grey card (`bg-[#F1F2F3]`, gray-200
+  border, `rounded-lg`, `shadow-sm`).
+- **The header is green where sl-dashboard's is blue** (`#2870f0`). *Not* the same hue-swapped HSL values: at
+  sl-dashboard's saturation and lightness, green comes out neon (`#28f072`), and white text on it is unreadable,
+  because the eye sees green as far brighter than blue. The green matches the blue's *brightness* instead, so
+  white text reads equally well on both: about `#1a8a47`, with a lighter hover shade and a darker button shade
+  in the same relation as sl-dashboard's `#578ff3` and `#184fc2`. They are Tailwind theme colours in
+  `index.css`, so changing the green is one line.
+- *Possibly later:* menu items to filter the public page — "Alla" or "Bara jag" and then a name. Decided once
+  phase 5 shows what that page feels like at the table.
+
 ## API
 
 | Method | Path | Auth | Description |
@@ -435,7 +456,6 @@ Corrections (edit a row, add a row, remove a row) arrive with phase 6.
 
 ## Open questions
 
-- UI language — Swedish like sl-dashboard is assumed ("Logga in", "Inget kvitto ännu").
 - The four first names, for `application.properties`.
 
 ---
@@ -459,7 +479,7 @@ in git history (`git log -- CLAUDE.md`), as a model for the next phase's.
 **Phase 2 - A two-page shell.** The one-jar build and the frontend frame, with placeholder content.
 - `frontend-maven-plugin` with pinned Node/npm, Vite output into `target/classes/static`, `mvn verify` producing
   the single jar. The Vite dev loop with its proxy.
-- React with `HashRouter` and two placeholder pages, `/#/` and `/#/upload`, and a way to move between them.
+- React with `HashRouter` and two placeholder pages, `/#/` and `/#/upload`, in the look and feel above.
 - The data layer's frame: Redux store, the RTK Query base api with `axiosBaseQuery`, and the stream as an
   `onCacheEntryAdded` streaming query (see Frontend data layer).
 - **The public page's SSE wiring, carrying a dummy counter** instead of a split: the emitter registry,
@@ -467,13 +487,103 @@ in git history (`git log -- CLAUDE.md`), as a model for the next phase's.
   the real state later replaces only the payload. It also settles the one link in the chain not confirmed in
   advance: open the page on a phone over mobile data and watch events arrive one at a time rather than in bursts,
   then lock and unlock the phone to exercise the reconnect.
-- Done when both pages load from `https://pbs.tarnvik.com` and the counter ticks on a phone.
+- Done when both pages load from `https://pbs.tarnvik.com` and the counter updates live on a phone.
+
+#### Phase 2 — step by step
+
+**The dummy counter counts connected viewers**, rather than ticking on a timer. Every open page is one; the
+number changes when a page connects or its connection dies. *Why:* it exercises every mechanism the real stream
+needs, with no extra code. A timer ticking every few seconds never lets the stream go quiet, so it would never
+prove that the heartbeat keeps Cloudflare's 100-second limit away — the situation a real dinner is in most of
+the time. A viewer count is quiet until someone connects, shows dead-connection pruning working (a closed tab
+disappears at the next heartbeat, within 20 s), and turns the phone's lock and unlock into a visible drop and
+return.
+
+**2.1 The frontend and the one-jar build** — Claude
+- `frontend/`: Vite, React 19, TypeScript, Tailwind 4 via PostCSS, ESLint config copied from sl-dashboard,
+  versions taken from sl-dashboard's `package.json`. `package-lock.json` committed.
+- `vite.config.ts`: `outDir: '../target/classes/static'` with `emptyOutDir: true`; dev proxy for `/api` to :8082
+  (the auth paths join it in phase 3).
+- `frontend-maven-plugin` in the pom, Node and npm pinned to the versions on the dev machine (Node 26.5.0,
+  npm 11.17.0, the same as overlord): `install-node-and-npm` and `npm ci` and `npm run build` in
+  `generate-resources`, and **`npm run lint` at `verify`**, so ESLint gates the build the way checkstyle does.
+  `-Dskip.npm -Dskip.installnodenpm` for backend-only builds.
+- **Cache headers for the static files.** `/assets/**` (file names carry a content hash) one year, `immutable`;
+  `index.html` `no-cache`. *Why:* without a `Cache-Control` header a browser may guess a lifetime for
+  `index.html` and keep showing the old release after a deploy; a hashed asset can never be stale.
+- `.gitignore`: `frontend/node/`, `frontend/node_modules/`.
+
+Verify, on the dev machine:
+1. `mvn verify` → `BUILD SUCCESS`, and the log shows the Node download (first time only), `npm ci`, the Vite
+   build and ESLint.
+2. `unzip -l target/pbs-*.jar | grep static/` lists `index.html` and the `assets/` files.
+3. `java -jar target/pbs-*.jar`, then `http://localhost:8082/` shows the placeholder page.
+4. `curl -sI localhost:8082/` → `Cache-Control: no-cache`; `curl -sI localhost:8082/assets/<a file>` →
+   `max-age=31536000` and `immutable`.
+5. `mvn verify -Dskip.npm -Dskip.installnodenpm` → `BUILD SUCCESS` with no npm step in the log.
+6. An unused variable added to a `.tsx` file makes `mvn verify` fail at ESLint; removed, it passes.
+
+**2.2 Header, menu and the two placeholder pages** — Claude
+- The look and feel above: header with icon, name and menu; the card; a page wrapper like sl-dashboard's
+  `View`. Theme colours in `index.css`. `index.html` with `lang="sv"`, the viewport tag and a title.
+- `createHashRouter` with `/` and `/upload`, both placeholders in a card. The menu closes on a click outside it,
+  as sl-dashboard's does.
+- **"Logga in" navigates to `/#/upload` for now.** That is where a login lands from phase 3, so the item already
+  leads to the right place; phase 3 only puts Google in front of it.
+- A favicon: the same card icon as an SVG, in the green.
+
+Verify, with `npm run dev` (Vite on :5173):
+1. Header green with white icon and name, menu button on the right; the page white with a grey card.
+2. The menu opens, "Logga in" leads to `/#/upload`, a click outside closes the menu; the icon leads back to `/#/`.
+3. Reloading on `/#/upload` stays on `/#/upload`.
+4. DevTools at 375 px wide (iPhone SE): whether the name fits is noted for a decision, not fixed in this step.
+
+**2.3 The stream, backend** — Claude
+- An emitter registry in `port.outgoing.sse`, copied from overlord's `SseNotificationProvider` mechanics: 24 h
+  emitter timeout, `: ping` comment every 20 s, dead emitters dropped on a failed send.
+- **The current state is the first event on every connection**, sent before the emitter is returned.
+- The viewer count is the state, an immutable record broadcast on every connect and every removal.
+  `@EnableScheduling` for the heartbeat.
+- `GET /api/public/events` (`text/event-stream`) in `port.incoming.rest`.
+- A `@WebMvcTest`: the stream starts asynchronously and its first event carries the count.
+
+Verify, on the dev machine:
+1. `curl -N localhost:8082/api/public/events` prints `data:{"viewers":1}` at once, then `:ping` every 20 s.
+2. A second `curl -N` in another terminal: both print `{"viewers":2}`. Ctrl-C the second: within 20 s the first
+   prints `{"viewers":1}` — pruning, found at the next heartbeat.
+
+**2.4 The stream, frontend** — Claude
+- Redux store holding only the RTK Query api; the base api and `axiosBaseQuery` copied from overlord.
+- The stream as an RTK Query streaming endpoint: `onCacheEntryAdded` opens the `EventSource`, writes each event
+  with `updateCachedData`, reopens it on `visibilitychange` when it is `CLOSED`, closes it when the cache entry
+  goes. The payload type is a hand-written interface (springdoc arrives in phase 3).
+- The public page shows the viewer count in its card, plus a small connection status line ("Ansluten",
+  "Återansluter …") — temporary, for watching the reconnect; it goes when phase 5 replaces the payload.
+
+Verify, with `npm run dev`:
+1. One tab shows 1; a second tab makes both show 2 at once; closing one makes the other show 1 within 20 s.
+2. Stop the backend: the status line changes. Start it again: the page reconnects by itself and shows the count.
+
+**2.5 Release `v0.2.0` and the phone test** — owner, with Claude preparing
+- `./change-version.sh 0.2.0`, push, then Ctrl-C and `just doit` on the Mini. The first build there downloads
+  Node into `frontend/node/` and takes longer.
+
+Verify:
+1. `https://pbs.tarnvik.com/` and `/#/upload` load, and `/ping` still answers `ok`.
+2. **Cloudflare streams unbuffered:** `curl -N https://pbs.tarnvik.com/api/public/events` from the dev machine
+   prints the first event at once, and `:ping` lines one by one, 20 s apart, not in bunches.
+3. **Quiet longer than 100 s survives:** that `curl` left running for five minutes is still connected.
+4. **On the phone, mobile data:** the page shows the count; opening it on the dev machine as well makes the phone
+   show one more within a second or two.
+5. **Lock and unlock:** lock the phone for a minute — the dev machine's count drops within 20 s; unlock — the
+   phone reconnects and both show it back.
+6. The manual's "Confirm Server-Sent Events stream through Cloudflare unbuffered" checklist item can be ticked.
 
 **Phase 3 - Login on the upload page.** The security frame, still with nothing behind it worth protecting.
 - Security config with the two gotchas above (static files permitted, 401 for `/api/**`), `SameSite=Lax`, the
   email check in `OidcUserService`, `/api/auth/me`, logout.
-- The upload page shows a "Logga in" button when logged out and the owner's name plus "Logga ut" when logged in.
-  The public page stays open to all.
+- The header menu shows "Logga in" when logged out, and the owner's name plus "Logga ut" when logged in. The
+  public page stays open to all.
 - One placeholder protected endpoint, so the 401 rule has something real to guard before the paid endpoint
   exists.
 - springdoc (in `local` only) and `@rtk-query/codegen-openapi`, with `/api/auth/me` as the first generated
