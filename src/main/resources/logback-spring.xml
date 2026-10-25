@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Logging configuration.
+
+  Deliberately thin: it imports Spring Boot's own console/file appender definitions rather than restating the
+  patterns and rolling policy. The file path and rolling limits are ordinary properties in
+  application-production.properties, not set here.
+
+  Keep Boot's default pattern. The log-retention stack on the Mini parses exactly that line; a custom pattern,
+  JSON logging or tracing needs a parser change there first (see "Infrastructure" in CLAUDE.md).
+
+  Under `production` both appenders are attached: startup output stays visible in the terminal, which is where
+  you look when a deployment fails, and the file is what the log-retention stack follows.
+-->
+<configuration>
+
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+  <springProfile name="production">
+    <!-- Requires LOG_FILE, which Boot derives from logging.file.name. -->
+    <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+
+  <springProfile name="!production">
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+  </springProfile>
+
+</configuration>

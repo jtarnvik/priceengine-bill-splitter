@@ -15,6 +15,7 @@
     <description>Bill splitter: Claude reads the receipt, friends watch their totals live</description>
     <properties>
         <java.version>25</java.version>
+        <maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     </properties>
     <dependencies>
@@ -59,6 +60,37 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <!--
+              Generates build.just from build.just.template, substituting the project version. build.just is
+              committed, because the Mini checks out a tag and builds immediately. failonerror="true", unlike
+              publicbackend's Render-era "false": a failed copy must stop change-version.sh, not pass silently.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>${maven-antrun-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-justfile</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <copy file="${project.basedir}/build.just.template"
+                                      tofile="${project.basedir}/build.just"
+                                      overwrite="true"
+                                      failonerror="true">
+                                    <filterset>
+                                        <filter token="project.version" value="${project.version}"/>
+                                    </filterset>
+                                </copy>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

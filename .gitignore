@@ -34,3 +34,13 @@ build/
 
 # macOS
 .DS_Store
+
+# Local development (secrets, from phase 3)
+application-local.properties
+
+# Deployment (just / Mac Mini)
+release/
+deployment/bin/
+deployment/logs/
+deployment/*.env
+pom.xml.versionsBackup
