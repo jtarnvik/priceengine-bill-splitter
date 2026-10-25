@@ -176,7 +176,8 @@ Google OAuth2 via Spring Security, admitting exactly one Google account: the own
 
 ### Security configuration — the two that bite
 
-1. **Permit the static files explicitly** — `/`, `/index.html`, `/assets/**`, `/favicon.ico`. With
+1. **Permit the static files explicitly** — `/`, `/index.html`, `/assets/**`, `/icon.svg` (the favicon, from
+   `frontend/public/`), and `/favicon.ico`, which some browsers ask for regardless and should get a 404. With
    `.anyRequest().authenticated()` and `oauth2Login`, a friend opening the public page would be bounced to Google
    just to load the JavaScript bundle.
 2. **Answer 401 for `/api/**`, never a redirect.** Reuse publicbackend's `defaultAuthenticationEntryPointFor`
@@ -514,7 +515,7 @@ the time. A viewer count is quiet until someone connects, shows dead-connection 
 disappears at the next heartbeat, within 20 s), and turns the phone's lock and unlock into a visible drop and
 return.
 
-**2.1 The frontend and the one-jar build** — Claude
+**2.1 The frontend and the one-jar build** — Claude ✅
 - `frontend/`: Vite, React 19, TypeScript, Tailwind 4 via PostCSS, ESLint config copied from sl-dashboard,
   versions taken from sl-dashboard's `package.json`. `package-lock.json` committed.
 - `.npmrc` with `legacy-peer-deps=true`, as in sl-dashboard: `eslint-plugin-react` 7.37 declares ESLint up to 9
@@ -542,7 +543,7 @@ Verify, on the dev machine:
 6. An `if` without braces in a `.tsx` file makes `mvn verify` fail at ESLint (`curly`); removed, it passes. (An
    unused variable is no test of ESLint: `tsc` in `npm run build` rejects it first.)
 
-**2.2 Header, menu and the two placeholder pages** — Claude
+**2.2 Header, menu and the two placeholder pages** — Claude ✅
 - The look and feel above: header with icon, name and menu; the card; a page wrapper like sl-dashboard's
   `View`. Theme colours in `index.css`. `index.html` with `lang="sv"`, the viewport tag and a title.
 - `createHashRouter` with `/` and `/upload`, both placeholders in a card. The menu closes on a click outside it,
@@ -556,6 +557,7 @@ Verify, with `npm run dev` (Vite on :5173):
 2. The menu opens, "Logga in" leads to `/#/upload`, a click outside closes the menu; the icon leads back to `/#/`.
 3. Reloading on `/#/upload` stays on `/#/upload`.
 4. DevTools at 375 px wide (iPhone SE): whether the name fits is noted for a decision, not fixed in this step.
+   It fits (2026-10-25). Should it ever not, it is cut with an ellipsis, keeping the menu button on the bar.
 
 **2.3 The stream, backend** — Claude
 - An emitter registry in `port.outgoing.sse`, copied from overlord's `SseNotificationProvider` mechanics: 24 h
