@@ -517,6 +517,9 @@ return.
 **2.1 The frontend and the one-jar build** — Claude
 - `frontend/`: Vite, React 19, TypeScript, Tailwind 4 via PostCSS, ESLint config copied from sl-dashboard,
   versions taken from sl-dashboard's `package.json`. `package-lock.json` committed.
+- `.npmrc` with `legacy-peer-deps=true`, as in sl-dashboard: `eslint-plugin-react` 7.37 declares ESLint up to 9
+  only, but works with 10. `fsevents` (macOS file watching, ships prebuilt) has its build script denied under
+  `allowScripts` in `package.json`; npm 11.17 warns about unreviewed install scripts and will later block them.
 - `vite.config.ts`: `outDir: '../target/classes/static'` with `emptyOutDir: true`; dev proxy for `/api` to :8082
   (the auth paths join it in phase 3).
 - `frontend-maven-plugin` in the pom, Node and npm pinned to the versions on the dev machine (Node 26.5.0,
@@ -536,7 +539,8 @@ Verify, on the dev machine:
 4. `curl -sI localhost:8082/` → `Cache-Control: no-cache`; `curl -sI localhost:8082/assets/<a file>` →
    `max-age=31536000` and `immutable`.
 5. `mvn verify -Dskip.npm -Dskip.installnodenpm` → `BUILD SUCCESS` with no npm step in the log.
-6. An unused variable added to a `.tsx` file makes `mvn verify` fail at ESLint; removed, it passes.
+6. An `if` without braces in a `.tsx` file makes `mvn verify` fail at ESLint (`curly`); removed, it passes. (An
+   unused variable is no test of ESLint: `tsc` in `npm run build` rejects it first.)
 
 **2.2 Header, menu and the two placeholder pages** — Claude
 - The look and feel above: header with icon, name and menu; the card; a page wrapper like sl-dashboard's

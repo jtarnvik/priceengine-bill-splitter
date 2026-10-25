@@ -44,3 +44,7 @@ deployment/bin/
 deployment/logs/
 deployment/*.env
 pom.xml.versionsBackup
+
+# Frontend (Node and npm are downloaded into frontend/node by frontend-maven-plugin)
+frontend/node/
+frontend/node_modules/

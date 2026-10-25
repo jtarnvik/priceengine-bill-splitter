@@ -17,6 +17,11 @@
         <java.version>25</java.version>
         <maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+        <frontend-maven-plugin.version>2.0.2</frontend-maven-plugin.version>
+        <!-- The versions on the dev machine (and overlord's). The plugin downloads exactly these into frontend/node,
+             so the dev machine and the Mini build with the same Node and npm, whatever else is installed. -->
+        <node.version>v26.5.0</node.version>
+        <npm.version>11.17.0</npm.version>
     </properties>
     <dependencies>
         <dependency>
@@ -88,6 +93,60 @@
                                     </filterset>
                                 </copy>
                             </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+              Builds the React app into target/classes/static (see frontend/vite.config.ts), so `mvn verify` alone
+              produces the complete jar. ESLint runs at verify, beside checkstyle, so it gates the build the same way.
+              Backend-only builds: -Dskip.npm -Dskip.installnodenpm.
+            -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>${frontend-maven-plugin.version}</version>
+                <configuration>
+                    <workingDirectory>frontend</workingDirectory>
+                    <nodeVersion>${node.version}</nodeVersion>
+                    <npmVersion>${npm.version}</npmVersion>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>npm-ci</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>ci</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-build</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-lint</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run lint</arguments>
                         </configuration>
                     </execution>
                 </executions>
