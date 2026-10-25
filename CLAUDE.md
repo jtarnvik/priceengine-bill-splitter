@@ -379,9 +379,9 @@ phase 4). Each still carries the whole of its part, so the rule above holds per 
   changes constantly, and the page reacts differently to each. Splitting by kind keeps the frequent event small
   and makes "a new receipt arrived" something the page is told rather than has to work out.
 
-- **Send the current state as the first events on connect** — `receipt`, then `split`, when there is a receipt. A reconnect is then indistinguishable from a first
-  connect, nothing on the phone ever fetches, and the response starts at once rather than idling towards
-  Cloudflare's 100 s limit.
+- **Send the current state as the first events on connect** — `receipt`, then `split`, when there is a
+  receipt. A reconnect is then indistinguishable from a first connect, nothing on the phone ever fetches, and
+  the response starts at once rather than idling towards Cloudflare's 100 s limit.
 - **Keep the heartbeat** (`: ping` every 20 s), for Cloudflare's idle timeout.
 - **Phones lock their screens mid-dinner.** iOS suspends the page and the connection dies; overlord's
   `live-updates.tsx` already notes that iOS can give up for good (`readyState` stuck at `CLOSED`). On
