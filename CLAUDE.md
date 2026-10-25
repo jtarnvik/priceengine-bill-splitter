@@ -37,14 +37,16 @@ writing the copy, and adapt rather than reinvent.
 | OAuth2 security config | `../publicbackend/src/main/java/com/tarnvik/publicbackend/config/SecurityConfig.java` | 3 |
 | Login state in React | `../sl-dashboard/src/hook/use-user.ts` and the `user` handling in `App.tsx` | 3 |
 | Anthropic Java SDK usage | `../publicbackend/src/main/java/com/tarnvik/publicbackend/commuter/port/outgoing/rest/claude/ClaudeProvider.java` | 4 |
+| Terminal dashboard | `../publicbackend/src/main/java/com/tarnvik/publicbackend/commuter/port/outgoing/terminal/` and `port/incoming/scheduled/DashboardRefreshJob.java`; its `CLAUDE.md` sections "Terminal dashboard" and "Logging"; overlord's dashboard, which it is modelled on | 8 |
 
 **Do not `@`-import publicbackend's `CLAUDE.md`** the way sl-dashboard does. Most of it is GTFS and commuter
 history that has nothing to do with this project and would only crowd the context. Copy what applies into this
 file instead.
 
 What *not* to copy from publicbackend: Spring Session JDBC, `SameSite=None`, the CORS configuration and its
-two frontend-origin properties, the pending-user flow in the success handler, Liquibase, the terminal
-dashboard. Each exists there because of a separate frontend origin or a database, and pbs has neither.
+two frontend-origin properties, the pending-user flow in the success handler, Liquibase. Each exists there
+because of a separate frontend origin or a database, and pbs has neither. The terminal dashboard *is* copied,
+but last (phase 8).
 
 ## Status
 
@@ -646,6 +648,20 @@ the dummy counter on the SSE stream, the public page showing per-person items an
 **Phase 6 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
 **Phase 7 - Phone polish.** Layout at 375 px, tap targets, empty states.
+
+### Operations
+
+**Phase 8 - Terminal dashboard.** A status board on the terminal pbs runs in on the Mini, under `production`, like
+publicbackend's and overlord's — so the three foreground tabs on the Mini look and work alike. Copy publicbackend's
+mechanics (jline in `port.outgoing.terminal`, one render thread owning the screen, repaints driven by Spring
+events plus one hourly clock, the console appender detached by name once the alternate screen is up, startup
+output left visible). What it shows is discussed when the phase is planned; candidates: the version, connected
+viewers, the current receipt (restaurant, total, how much is still unassigned), and the last parse — when, how
+long it took, and whether it failed.
+- *Why last:* it shows the state of features that do not exist yet, and nothing else depends on it.
+- *Watch:* the dashboard needs a real terminal (a TTY), so `start-pbs.sh` must keep not piping through `tee`, and
+  `logback-spring.xml` must declare the console appender by a name the dashboard can detach — read
+  publicbackend's "Logging" section before changing either.
 
 ---
 
