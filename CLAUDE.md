@@ -48,10 +48,12 @@ dashboard. Each exists there because of a separate frontend origin or a database
 
 ## Status
 
-**Phase 1 done (2026-10-25); phase 2 in progress.** pbs `v0.1.1` runs on the Mini
-and answers `/ping` at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
-log collected by the log-retention stack; the Google OAuth client exists for phase 3. The app itself is still
-only `/ping`. The design below was worked out in one discussion (October 2026) before the repository existed.
+**Phases 1 and 2 done (2026-10-25); phase 3 next, and it needs its step plan first.** pbs `v0.2.0` runs on the
+Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
+log-retention stack. It serves the React shell from the jar — header, menu, the two placeholder pages — and the
+live stream with its dummy viewer count, proven over Cloudflare and on a phone. The Google OAuth client exists for
+phase 3. Phase 2's step plan below is still in full: reduce it to what exists and why (as phase 1's was) when
+phase 3 is planned. The design below was worked out in one discussion (October 2026) before the repository existed.
 Treat it as decided unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text
 from this file as it is carried out, keeping the "why" notes.
 
@@ -492,7 +494,7 @@ a second tagged version (`v0.1.1`) deployed the same way to prove the flow repea
 in Infrastructure, Deployment and Authentication; host-side details are in the manual. The worked step plan is
 in git history (`git log -- CLAUDE.md`), as a model for the next phase's.
 
-**Phase 2 - A two-page shell.** The one-jar build and the frontend frame, with placeholder content.
+**Phase 2 - A two-page shell** ✅ (2026-10-25). The one-jar build and the frontend frame, with placeholder content.
 - `frontend-maven-plugin` with pinned Node/npm, Vite output into `target/classes/static`, `mvn verify` producing
   the single jar. The Vite dev loop with its proxy.
 - React with `HashRouter` and two placeholder pages, `/#/` and `/#/upload`, in the look and feel above.
@@ -600,7 +602,7 @@ Verify, with `npm run dev`:
 2. Stop the backend: the status line changes. Start it again: the page reconnects by itself and shows the count
    — through the Vite proxy, which answers 502 while the backend is down, the same case as Cloudflare's.
 
-**2.5 Release `v0.2.0` and the phone test** — owner, with Claude preparing
+**2.5 Release `v0.2.0` and the phone test** — owner, with Claude preparing ✅
 - `./change-version.sh 0.2.0`, push, then Ctrl-C and `just doit` on the Mini. The first build there downloads
   Node into `frontend/node/` and takes longer.
 
@@ -614,6 +616,10 @@ Verify:
 5. **Lock and unlock:** lock the phone for a minute — the dev machine's count drops within 40 s; unlock — the
    phone reconnects and both show it back.
 6. The manual's "Confirm Server-Sent Events stream through Cloudflare unbuffered" checklist item can be ticked.
+
+**2.5 outcome, 2026-10-25.** All checks passed. Through Cloudflare the first event arrived at once and the pings
+20 s apart, one by one; a stream with only pings for 80 s was not cut; the `curl` held for 310 s until its own
+timeout. `index.html` comes back `no-cache` (Cloudflare `DYNAMIC`), the assets `max-age=31536000, immutable`.
 
 **Phase 3 - Login on the upload page.** The security frame, still with nothing behind it worth protecting.
 - Security config with the two gotchas above (static files permitted, 401 for `/api/**`), `SameSite=Lax`, the
