@@ -50,12 +50,11 @@ but last (phase 8).
 
 ## Status
 
-**Phases 1 and 2 done (2026-10-25); phase 3 next, and it needs its step plan first.** pbs `v0.2.0` runs on the
-Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
-log-retention stack. It serves the React shell from the jar — header, menu, the two placeholder pages — and the
-live stream with its dummy viewer count, proven over Cloudflare and on a phone. The Google OAuth client exists for
-phase 3. Phase 2's step plan below is still in full: reduce it to what exists and why (as phase 1's was) when
-phase 3 is planned. The design below was worked out in one discussion (October 2026) before the repository existed.
+**Phases 1 and 2 done (2026-10-25); phase 3's steps 3.1–3.3 verified on the dev machine, 3.4 (release
+`v0.3.0` and the production test) under way.** pbs `v0.2.0` runs on the Mini at `https://pbs.tarnvik.com`,
+behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the log-retention stack. It serves the
+React shell from the jar — header, menu, the two placeholder pages — and the live stream with its dummy viewer
+count, proven over Cloudflare and on a phone. The design below was worked out in one discussion (October 2026) before the repository existed.
 Treat it as decided unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text
 from this file as it is carried out, keeping the "why" notes.
 
@@ -138,9 +137,10 @@ What pbs itself must get right:
   that loses pbs's block shows as Up.
 - **Cloudflare abandons a response after 100 seconds (524).** A receipt parse takes perhaps 10–30 s, so a
   synchronous request is fine. The SSE stream relies on its heartbeat (see Live updates).
-- **Caddy flushes `text/event-stream` immediately** — no proxy configuration is needed for SSE. Cloudflare
-  normally streams it unbuffered too, but that is the one link not confirmed in advance; phase 2 confirms
-  it before anything depends on it.
+- **Caddy flushes `text/event-stream` immediately** — no proxy configuration is needed for SSE — **and so does
+  Cloudflare**, confirmed in phase 2 (2026-10-25): the first event arrived at once and the pings 20 s apart, one
+  by one, and a stream quiet but for pings held for over five minutes. `index.html` comes back `no-cache`
+  (Cloudflare `DYNAMIC`), the assets `max-age=31536000, immutable`.
 - **The log file format is a contract with the log-retention stack.** On the Mini, Grafana Alloy follows
   `deployment/logs/pbs.log` into Loki (30 days, Grafana as the UI; manual: "Log retention — Loki + Grafana").
   It reuses publicbackend's parser, which works only while these three things stay true:
@@ -175,8 +175,17 @@ Google OAuth2 via Spring Security, admitting exactly one Google account: the own
   afterwards because it has to record pending users; with a single fixed user there is nothing to record.
 - **The allowed email comes from the environment**, never from a tracked file. The repo is public.
 - **There is no login page.** The header menu's "Logga in" item links to `/oauth2/authorization/google` when
-  `/api/auth/me` answers 401. With a single provider, Spring redirects straight to Google. The success handler
-  redirects to `/#/upload`.
+  `/api/auth/me` answers 401. With a single provider, Spring redirects straight to Google. A login redirects to
+  `/#/upload` (`defaultSuccessUrl(…, true)`), a refused one to `/#/denied` (`failureUrl`), which says only the
+  owner can log in — otherwise Spring would show its own generated, English `/login` page.
+- **`/api/auth/me` answers the owner's email, or 401.** It is not permitted for anonymous requests, as the API
+  table's "Optional" first suggested: the 401 rule then answers for it, and the controller never sees a missing
+  principal.
+- **Logout is `POST /logout` answering 200** (`HttpStatusReturningLogoutSuccessHandler`), not a redirect: the app
+  calls it with axios, and the mutation's `auth` tag refetches `/api/auth/me`, which flips the menu.
+- **Sessions keep Tomcat's 30-minute idle timeout**, by decision. The app is used for a few minutes once the bill
+  has come: the owner pays, uploads the receipt and ticks the boxes in one go, so there are no long pauses for the
+  timeout to catch.
 
 ### Security configuration — the two that bite
 
@@ -187,6 +196,15 @@ Google OAuth2 via Spring Security, admitting exactly one Google account: the own
 2. **Answer 401 for `/api/**`, never a redirect.** Reuse publicbackend's `defaultAuthenticationEntryPointFor`
    with a `PathPatternRequestMatcher` on `/api/**`. A redirect to Google on a `fetch` fails in a way that looks
    like a CORS error and explains nothing.
+
+Two more found while building it:
+- **Permit `/error`.** A 404 or 401 is rendered by forwarding to Boot's error page, and Spring Security authorizes
+  that forward too. Unpermitted, an anonymous `/favicon.ico` got a redirect to Google instead of its 404.
+- **oauth2Login redirects only browser navigations** (`Accept: text/html`); anything else outside `/api/**` gets
+  401 as well. A MockMvc test of the redirect must send that header.
+
+springdoc's paths (`/v3/api-docs/**`, `/swagger-ui/**`) are permitted too, so that codegen can read the spec
+without a login; outside `local` they do not exist and answer 404.
 
 Also set `server.servlet.session.cookie.same-site=lax` explicitly. A cookie with no `SameSite` attribute is
 treated differently by different browsers, and the CSRF reasoning above depends on Lax.
@@ -205,6 +223,19 @@ insurance against a security matcher reordered later.
   the Vite root. Nothing is copied into `src/main/resources/static`.
 - Skip the frontend during backend-only work with `-Dskip.npm` (and `-Dskip.installnodenpm`).
 - Gitignore the plugin's downloaded `node/` directory.
+- **`npm run lint` runs at `verify`**, beside checkstyle, so ESLint gates the build the same way. (To prove it, an
+  `if` without braces — `curly` — is the test; an unused variable is not, since `tsc` in `npm run build` rejects
+  it first.)
+- **`.npmrc` has `legacy-peer-deps=true`**, as in sl-dashboard: `eslint-plugin-react` 7.37 declares ESLint up to
+  9 only, but works with 10. `fsevents` has its build script denied under `allowScripts` in `package.json`; npm
+  11.17 warns about unreviewed install scripts and will later block them.
+- **`ajv` 8 is a direct devDependency for that reason.** `@rtk-query/codegen-openapi` needs `ajv-draft-04`, which
+  takes ajv 8 as a *peer*. Peers are not installed under `legacy-peer-deps`, so `ajv-draft-04` was hoisted next to
+  ESLint's ajv 6 and `npm run generate-api` failed with `Cannot find module 'ajv/dist/core'`. Declared, ajv 8 is
+  hoisted and ESLint's 6 nested under it.
+- **Cache headers for the static files** (`StaticResourceConfig`): `/assets/**` one year, `immutable`, since the
+  file names carry a content hash; `index.html` `no-cache`. Without a header a browser may guess a lifetime for
+  `index.html` and keep showing the old release after a deploy.
 
 *Why not cl-media's approach.* Overlord builds the frontend in the justfile (`npm ci`, `vite build`,
 `cp frontend/build → src/main/resources/static`) and then runs `mvn install`. Two weaknesses, both fixed here:
@@ -220,19 +251,29 @@ The cost is slower Maven builds during backend work, which `-Dskip.npm` answers.
 
 **Routing uses `HashRouter`**, as overlord does. The server never sees client-side paths, so no fallback that
 forwards unknown paths to `index.html` is needed, and the static-file permit list stays short. Two pages:
-`/#/` (public) and `/#/upload` (owner).
+`/#/` (public) and `/#/upload` (owner), plus `/#/denied` for a refused login.
 
 ## Development
 
 Backend on :8082 (`-Dspring.profiles.active=local`), Vite on :5173. **Vite proxies `/api`, `/oauth2`,
-`/login/oauth2` and `/logout` to :8082**, leaving the `Host` header alone (no `changeOrigin`).
+`/login/oauth2` and `/logout` to :8082**, leaving the `Host` header alone (`changeOrigin: false`, explicit).
 
 *Why proxy the auth paths too:* Spring builds the OAuth2 redirect URI from the request's host, so with the
 `Host: localhost:5173` header preserved, Google sends the browser back through Vite. Dev is then single-origin
 exactly like production: the success handler can redirect to a relative `/#/upload` in both, the session cookie
-belongs to :5173, and no `frontend-url` property is needed anywhere. Verify on the first dev login that the
-redirect URI Google receives really is `localhost:5173` — if Vite rewrites the host, set `changeOrigin: false`
-explicitly.
+belongs to :5173, and no `frontend-url` property is needed anywhere. Checked with curl through the running Vite
+proxy: `/oauth2/authorization/google` redirects with `redirect_uri=http://localhost:5173/login/oauth2/code/google`.
+
+**Secrets in development** go in `local-secrets.properties` in the project root (gitignored), copied from the
+committed `local-secrets.properties.example`, with the same names as `pbs.env`. The tracked
+`application-local.properties` imports it (`spring.config.import=optional:file:./…`, relative to the working
+directory, which is the project root from IntelliJ and Maven) and switches springdoc on. *Why not a gitignored
+`application-local.properties`*, as first planned: springdoc being on in `local` is configuration, not a secret,
+and would then live in a file git does not know.
+
+**Regenerating the API client:** start the backend in `local`, then `npm run generate-api` in `frontend/`, and
+commit `src/communication/api/generated-api.ts`. Tests use the `test` profile
+(`src/test/resources/application-test.properties`), which holds dummy Google values and `owner@example.com`.
 
 ## Deployment
 
@@ -392,6 +433,16 @@ phase 4). Each still carries the whole of its part, so the rule above holds per 
   `live-updates.tsx` already notes that iOS can give up for good (`readyState` stuck at `CLOSED`). On
   `visibilitychange` back to visible, reopen the `EventSource` if it is closed. The state-on-connect rule makes
   that the entire recovery.
+- **Retry after a failed connection too, not only on `visibilitychange`.** `EventSource` reconnects by itself
+  after a dropped stream, but gives up for good (`CLOSED`) when a reconnect gets a non-200 answer — which is
+  exactly Cloudflare's 502 while pbs restarts during a deploy. So on `CLOSED` it is reopened after a delay growing
+  from 2 s to 30 s; otherwise every open page would stop updating after each deploy until its phone was locked
+  and unlocked.
+- **All streams are closed on `ContextClosedEvent`.** It comes before the web server's graceful shutdown, which
+  otherwise waits its full 30 s for these never-ending responses — on every deploy with a phone on the page — and
+  logs `Graceful shutdown aborted with one or more requests still active` (tried, 2026-10-25).
+- **Events are named** (`event: viewers` for phase 2's dummy), never unnamed: `onmessage` sees only unnamed
+  events, a named one needs `addEventListener`, so the dummy already uses the mechanism the real ones will.
 - The browser's 6-connections-per-site limit does not apply: Cloudflare serves the browser over HTTP/2.
 - The stream endpoint is public and read-only: `GET /api/public/events`.
 
@@ -423,8 +474,15 @@ stack, so its files are the reference (see Reference implementations).
   and request fields Bean Validation (boxed, with `@Valid`), or every generated field is optional.
 - **springdoc only in the `local` profile.** The app is on the public internet, and `/v3/api-docs` plus Swagger
   UI would publish the whole API surface. Off by default, on in `local`, which is the only place codegen runs.
-- **The stream's payload type is invisible to springdoc** (an `SseEmitter` has no typed body). Hand-write that
-  interface, or register its schema with the spec — decided when phase 2 is planned.
+- **The stream's payload type is invisible to springdoc** (an `SseEmitter` has no typed body), so it is
+  hand-written in `types/live.ts`, beside its Java record. The stream's controller is tagged `events`, and
+  `openapi-config.cjs` excludes that tag.
+- **Logout is hand-written** in `auth-api.ts`: `/logout` is Spring Security's filter, so springdoc never sees it.
+  It is injected into the *generated* api, so the `auth` tag it invalidates is a known tag type.
+- **The login state is `useLoginState()`** (`hook/use-login-state.ts`): `loading`, `loggedOut` (401),
+  `loggedIn`, `offline` — sl-dashboard's four, read from the `getMe` cache entry instead of a context. It checks
+  the error before the data, because a failed refetch keeps the previous data: right after logout `data` still
+  holds the owner while `error` already says 401.
 
 ## The two pages
 
@@ -448,8 +506,10 @@ The same frame as sl-dashboard, so the owner's apps feel like one family; read i
 sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is English.
 
 - **A fixed header bar**: on the left an icon (`FaRegCreditCard` from `react-icons`, leading to `/#/`) and the
-  name "PriceEngine Bill Splitter" — possibly too long at 375 px, judged by eye on the first release; on the right
-  a hamburger button opening a white dropdown menu. The menu holds only "Logga in" to begin with.
+  name "PriceEngine Bill Splitter" — it fits at 375 px (2026-10-25); should it ever not, it is cut with an
+  ellipsis, keeping the menu button on the bar. On the right a hamburger button opening a white dropdown menu,
+  closed by a click outside it: "Logga in" when logged out; "Ladda upp kvitto" and "Logga ut" when logged in —
+  the first so that the owner can get back to `/#/upload` from the public page.
 - **Pages**: white background, content in sl-dashboard's very slightly grey card (`bg-[#F1F2F3]`, gray-200
   border, `rounded-lg`, `shadow-sm`).
 - **The header is green where sl-dashboard's is blue** (`#2870f0`). *Not* the same hue-swapped HSL values: at
@@ -466,11 +526,12 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/ping` | Public | Health check for UptimeRobot |
-| GET | `/api/auth/me` | Optional | The owner, or 401 |
+| GET | `/api/auth/me` | Owner | The owner's email, or 401 |
+| GET | `/api/protected/ping` | Owner | Placeholder until phase 4, so the 401 rule guards something real |
 | GET | `/api/public/events` | Public | SSE stream; current state on connect, then on every change |
 | POST | `/api/protected/receipt` | Owner | Multipart image → parse → replaces the state, broadcasts it |
 | PUT | `/api/protected/items/{index}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
-| POST | `/logout` | Owner | Ends the session |
+| POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
 Corrections (edit a row, add a row, remove a row) arrive with phase 6.
 
@@ -496,137 +557,26 @@ a second tagged version (`v0.1.1`) deployed the same way to prove the flow repea
 in Infrastructure, Deployment and Authentication; host-side details are in the manual. The worked step plan is
 in git history (`git log -- CLAUDE.md`), as a model for the next phase's.
 
-**Phase 2 - A two-page shell** ✅ (2026-10-25). The one-jar build and the frontend frame, with placeholder content.
-- `frontend-maven-plugin` with pinned Node/npm, Vite output into `target/classes/static`, `mvn verify` producing
-  the single jar. The Vite dev loop with its proxy.
-- React with `HashRouter` and two placeholder pages, `/#/` and `/#/upload`, in the look and feel above.
-- The data layer's frame: Redux store, the RTK Query base api with `axiosBaseQuery`, and the stream as an
-  `onCacheEntryAdded` streaming query (see Frontend data layer).
-- **The public page's SSE wiring, carrying a dummy counter** instead of a split: the emitter registry,
-  state-on-connect, the heartbeat and the `visibilitychange` reconnect. It is part of the frame, not a feature —
-  the real state later replaces only the payload. It also settles the one link in the chain not confirmed in
-  advance: open the page on a phone over mobile data and watch events arrive one at a time rather than in bursts,
-  then lock and unlock the phone to exercise the reconnect.
-- Done when both pages load from `https://pbs.tarnvik.com` and the counter updates live on a phone.
+**Phase 2 - A two-page shell** ✅ (2026-10-25). The one-jar build and the frontend frame, with placeholder
+content: `frontend-maven-plugin` building Vite into the jar, ESLint at `verify`, the header, menu and two
+placeholder pages, the Redux store with the RTK Query base api, and the SSE stream end to end — emitter registry,
+state-on-connect, heartbeat, the `visibilitychange` reopen and the retry after a failed connection — released as
+`v0.2.0` and proven over Cloudflare and on a phone over mobile data, locked and unlocked. What it established is
+now in Infrastructure, Build, Live updates, Frontend data layer and Look and feel; the worked step plan is in git
+history.
 
-#### Phase 2 — step by step
-
-**The dummy counter counts connected viewers**, rather than ticking on a timer. Every open page is one; the
-number changes when a page connects or its connection dies. *Why:* it exercises every mechanism the real stream
-needs, with no extra code. A timer ticking every few seconds never lets the stream go quiet, so it would never
-prove that the heartbeat keeps Cloudflare's 100-second limit away — the situation a real dinner is in most of
-the time. A viewer count is quiet until someone connects, shows dead-connection pruning working (a closed tab
-disappears at the next heartbeat, within 20 s), and turns the phone's lock and unlock into a visible drop and
-return.
-
-**2.1 The frontend and the one-jar build** — Claude ✅
-- `frontend/`: Vite, React 19, TypeScript, Tailwind 4 via PostCSS, ESLint config copied from sl-dashboard,
-  versions taken from sl-dashboard's `package.json`. `package-lock.json` committed.
-- `.npmrc` with `legacy-peer-deps=true`, as in sl-dashboard: `eslint-plugin-react` 7.37 declares ESLint up to 9
-  only, but works with 10. `fsevents` (macOS file watching, ships prebuilt) has its build script denied under
-  `allowScripts` in `package.json`; npm 11.17 warns about unreviewed install scripts and will later block them.
-- `vite.config.ts`: `outDir: '../target/classes/static'` with `emptyOutDir: true`; dev proxy for `/api` to :8082
-  (the auth paths join it in phase 3).
-- `frontend-maven-plugin` in the pom, Node and npm pinned to the versions on the dev machine (Node 26.5.0,
-  npm 11.17.0, the same as overlord): `install-node-and-npm` and `npm ci` and `npm run build` in
-  `generate-resources`, and **`npm run lint` at `verify`**, so ESLint gates the build the way checkstyle does.
-  `-Dskip.npm -Dskip.installnodenpm` for backend-only builds.
-- **Cache headers for the static files.** `/assets/**` (file names carry a content hash) one year, `immutable`;
-  `index.html` `no-cache`. *Why:* without a `Cache-Control` header a browser may guess a lifetime for
-  `index.html` and keep showing the old release after a deploy; a hashed asset can never be stale.
-- `.gitignore`: `frontend/node/`, `frontend/node_modules/`.
-
-Verify, on the dev machine:
-1. `mvn verify` → `BUILD SUCCESS`, and the log shows the Node download (first time only), `npm ci`, the Vite
-   build and ESLint.
-2. `unzip -l target/pbs-*.jar | grep static/` lists `index.html` and the `assets/` files.
-3. `java -jar target/pbs-*.jar`, then `http://localhost:8082/` shows the placeholder page.
-4. `curl -sI localhost:8082/` → `Cache-Control: no-cache`; `curl -sI localhost:8082/assets/<a file>` →
-   `max-age=31536000` and `immutable`.
-5. `mvn verify -Dskip.npm -Dskip.installnodenpm` → `BUILD SUCCESS` with no npm step in the log.
-6. An `if` without braces in a `.tsx` file makes `mvn verify` fail at ESLint (`curly`); removed, it passes. (An
-   unused variable is no test of ESLint: `tsc` in `npm run build` rejects it first.)
-
-**2.2 Header, menu and the two placeholder pages** — Claude ✅
-- The look and feel above: header with icon, name and menu; the card; a page wrapper like sl-dashboard's
-  `View`. Theme colours in `index.css`. `index.html` with `lang="sv"`, the viewport tag and a title.
-- `createHashRouter` with `/` and `/upload`, both placeholders in a card. The menu closes on a click outside it,
-  as sl-dashboard's does.
-- **"Logga in" navigates to `/#/upload` for now.** That is where a login lands from phase 3, so the item already
-  leads to the right place; phase 3 only puts Google in front of it.
-- A favicon: the same card icon as an SVG, in the green.
-
-Verify, with `npm run dev` (Vite on :5173):
-1. Header green with white icon and name, menu button on the right; the page white with a grey card.
-2. The menu opens, "Logga in" leads to `/#/upload`, a click outside closes the menu; the icon leads back to `/#/`.
-3. Reloading on `/#/upload` stays on `/#/upload`.
-4. DevTools at 375 px wide (iPhone SE): whether the name fits is noted for a decision, not fixed in this step.
-   It fits (2026-10-25). Should it ever not, it is cut with an ellipsis, keeping the menu button on the bar.
-
-**2.3 The stream, backend** — Claude ✅
-- An emitter registry in `port.outgoing.sse`, copied from overlord's `SseNotificationProvider` mechanics: 24 h
-  emitter timeout, `: ping` comment every 20 s, dead emitters dropped on a failed send.
-- **The current state is the first event on every connection**, sent before the emitter is returned.
-- **A named event, `event: viewers`**, not an unnamed one. The real stream has two named events (see Live
-  updates), and the browser treats them differently — `onmessage` sees only unnamed events, a named one needs
-  `addEventListener` — so the dummy uses the mechanism the real ones will.
-- The viewer count is the state, an immutable record broadcast on every connect and every removal.
-  `@EnableScheduling` for the heartbeat.
-- `GET /api/public/events` (`text/event-stream`) in `port.incoming.rest`.
-- A `@WebMvcTest`: the stream starts asynchronously and its first event carries the count.
-- **All streams are closed on `ContextClosedEvent`.** It comes before the web server's graceful shutdown, which
-  otherwise waits its full 30 s for these never-ending responses — on every deploy with a phone on the page.
-
-Verify, on the dev machine:
-1. `curl -N localhost:8082/api/public/events` prints `event:viewers` and `data:{"viewers":1}` at once, then
-   `:ping` every 20 s.
-2. A second `curl -N` in another terminal: both print `{"viewers":2}`. Ctrl-C the second: within 40 s the first
-   prints `{"viewers":1}` — pruning, found at the second heartbeat after the close. (The first write to a closed
-   connection usually succeeds; only the next one fails.)
-3. Ctrl-C pbs with a `curl -N` connected: it stops at once, not after 30 s. Without the `ContextClosedEvent`
-   listener the log says `Graceful shutdown aborted with one or more requests still active` (tried, 2026-10-25).
-
-**2.4 The stream, frontend** — Claude ✅
-- Redux store holding only the RTK Query api; the base api and `axiosBaseQuery` copied from overlord.
-- The stream as an RTK Query streaming endpoint: `onCacheEntryAdded` opens the `EventSource`, writes each event
-  with `updateCachedData`, reopens it on `visibilitychange` when it is `CLOSED`, closes it when the cache entry
-  goes. The payload type is a hand-written interface (springdoc arrives in phase 3).
-- **Retry after a failed connection, not only on `visibilitychange`.** `EventSource` reconnects by itself after a
-  dropped stream, but gives up for good (`CLOSED`) when a reconnect gets a non-200 answer — which is exactly what
-  Cloudflare's 502 is while pbs restarts during a deploy. So on `CLOSED`, reopen after a delay that grows to a cap
-  (a few seconds up to about 30 s); otherwise every open page stops updating after each deploy until its phone
-  is locked and unlocked.
-- The public page shows the viewer count in its card, plus a small connection status line ("Ansluten",
-  "Återansluter …") — temporary, for watching the reconnect; it goes when phase 5 replaces the payload.
-
-Verify, with `npm run dev`:
-1. One tab shows 1; a second tab makes both show 2 at once; closing one makes the other show 1 within 40 s.
-2. Stop the backend: the status line changes. Start it again: the page reconnects by itself and shows the count
-   — through the Vite proxy, which answers 502 while the backend is down, the same case as Cloudflare's.
-
-**2.5 Release `v0.2.0` and the phone test** — owner, with Claude preparing ✅
-- `./change-version.sh 0.2.0`, push, then Ctrl-C and `just doit` on the Mini. The first build there downloads
-  Node into `frontend/node/` and takes longer.
-
-Verify:
-1. `https://pbs.tarnvik.com/` and `/#/upload` load, and `/ping` still answers `ok`.
-2. **Cloudflare streams unbuffered:** `curl -N https://pbs.tarnvik.com/api/public/events` from the dev machine
-   prints the first event at once, and `:ping` lines one by one, 20 s apart, not in bunches.
-3. **Quiet longer than 100 s survives:** that `curl` left running for five minutes is still connected.
-4. **On the phone, mobile data:** the page shows the count; opening it on the dev machine as well makes the phone
-   show one more within a second or two.
-5. **Lock and unlock:** lock the phone for a minute — the dev machine's count drops within 40 s; unlock — the
-   phone reconnects and both show it back.
-6. The manual's "Confirm Server-Sent Events stream through Cloudflare unbuffered" checklist item can be ticked.
-
-**2.5 outcome, 2026-10-25.** All checks passed. Through Cloudflare the first event arrived at once and the pings
-20 s apart, one by one; a stream with only pings for 80 s was not cut; the `curl` held for 310 s until its own
-timeout. `index.html` comes back `no-cache` (Cloudflare `DYNAMIC`), the assets `max-age=31536000, immutable`.
+**The stream carries a dummy, the number of connected viewers, until phase 5.** *Why a viewer count and not a
+timer:* it exercises every mechanism the real stream needs, with no extra code. A timer ticking every few seconds
+never lets the stream go quiet, so it would never prove that the heartbeat keeps Cloudflare's 100-second limit
+away — the situation a real dinner is in most of the time. A viewer count is quiet until someone connects, shows
+dead-connection pruning working (a closed tab disappears within two heartbeats, 40 s: the first write to a closed
+connection usually succeeds, only the next one fails), and turns a phone's lock and unlock into a visible drop and
+return. The public page's connection status line ("Ansluten", "Återansluter …") is temporary too.
 
 **Phase 3 - Login on the upload page.** The security frame, still with nothing behind it worth protecting.
 - Security config with the two gotchas above (static files permitted, 401 for `/api/**`), `SameSite=Lax`, the
   email check in `OidcUserService`, `/api/auth/me`, logout.
-- The header menu shows "Logga in" when logged out, and the owner's name plus "Logga ut" when logged in. The
+- The header menu shows "Logga in" when logged out, and "Logga ut" when logged in. The
   public page stays open to all.
 - One placeholder protected endpoint, so the 401 rule has something real to guard before the paid endpoint
   exists.
@@ -635,6 +585,70 @@ timeout. `index.html` comes back `no-cache` (Cloudflare `DYNAMIC`), the assets `
 - Tests: anonymous access to `/api/protected/**` gets 401; a different email is refused.
 - Done when the owner can log in and out on `https://pbs.tarnvik.com` from a phone, and a second Google account
   is refused — and the dev login through the Vite proxy works too.
+
+#### Phase 3 — step by step
+
+Planned and implemented in one go (2026-10-25), at the owner's request, from the design above; what the design
+did not settle is recorded in Authentication, Development and Frontend data layer.
+
+**3.1 Security, backend** — Claude ✅
+- `spring-boot-starter-security` and `-oauth2-client`. `SecurityConfig` with the static-file permits, `/error`,
+  401 for `/api/**`, `oauth2Login` (success to `/#/upload`, failure to `/#/denied`), logout answering 200, CSRF
+  off. `OwnerOnlyOidcUserService` compares the verified email, case-insensitively, against `pbs.allowed-email`
+  and refuses to start if it is blank.
+- `GET /api/auth/me` (`AuthController`, `MeResponse`), `GET /api/protected/ping` (placeholder).
+- `server.servlet.session.cookie.same-site=lax`; the Google registration from `GOOGLE_CLIENT_ID` and
+  `GOOGLE_CLIENT_SECRET`.
+- Tests: `SecurityConfigTest` (`@SpringBootTest`, the real chain; the owner via `oidcLogin()`, whose principal is
+  an `OidcUser` as `AuthController` expects — `@WithMockUser`'s is not) and `OwnerOnlyOidcUserServiceTest`. The
+  `@WebMvcTest`s exclude the five security auto-configurations.
+
+Verify, on the dev machine:
+1. `mvn verify` → `BUILD SUCCESS`, `Tests run: 20, Failures: 0`.
+2. `java -jar target/pbs-*.jar --GOOGLE_CLIENT_ID=x --GOOGLE_CLIENT_SECRET=x --PBS_ALLOWED_EMAIL=x@example.com`,
+   then `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Accept: text/html' localhost:8082<path>`:
+   `/`, `/index.html`, `/icon.svg` and an `/assets/` file → 200; `/favicon.ico` → 404; `/api/auth/me`,
+   `/api/protected/ping` and `/api/nothing` → 401 with no redirect; `/somewhere` → 302 to
+   `/oauth2/authorization/google`; `/v3/api-docs` → 404.
+3. `curl -sD - -o /dev/null localhost:8082/oauth2/authorization/google | grep -i set-cookie` → `SameSite=Lax`.
+4. Without `PBS_ALLOWED_EMAIL` the jar refuses to start, naming the placeholder.
+
+**3.2 springdoc and the generated client** — Claude ✅
+- `springdoc-openapi-starter-webmvc-ui` 3.1.1 (overlord's; 3.2.0 was a day old), off in `application.properties`,
+  on in the tracked `application-local.properties`, which also imports `local-secrets.properties`.
+- `@rtk-query/codegen-openapi`, `openapi-config.cjs` copied from overlord (port 8082, `events` excluded by tag),
+  `npm run generate-api`, `generated-api.ts` committed. `ajv` 8 as a devDependency (see Build).
+
+Verify:
+1. Backend in `local`: `curl -s localhost:8082/v3/api-docs` lists `/api/auth/me` (`getMe`, tag `auth`) and
+   `MeResponse` with `email` under `required`; `http://localhost:8082/swagger-ui.html` opens.
+2. `npm run generate-api` in `frontend/` → `Done`, and `git status` shows `generated-api.ts` unchanged.
+
+**3.3 Login state in the frontend** — Claude ✅
+- Vite proxies `/oauth2`, `/login/oauth2` and `/logout` as well as `/api`, with `changeOrigin: false`.
+- `useLoginState()`, the logout mutation, the menu ("Logga in" / "Ladda upp kvitto" + "Logga ut"), the upload
+  page asking a logged-out visitor to log in, and `/#/denied`.
+
+Verify, with `local-secrets.properties` filled in, the backend in `local` and `npm run dev`:
+1. `http://localhost:5173/`: the menu shows "Logga in". It leads to Google, which shows
+   `redirect_uri=http://localhost:5173/login/oauth2/code/google` in its URL; after login the browser is on
+   `localhost:5173/#/upload` and the card says "Kommer i fas 4".
+2. The menu now shows "Ladda upp kvitto" and "Logga ut". "Logga ut" lands on `/#/` and the menu shows "Logga in";
+   `/#/upload` then asks to log in.
+3. The public page's viewer count still works while logged in and out.
+
+**3.4 Release `v0.3.0` and the production test** — owner, with Claude preparing
+- `./change-version.sh 0.3.0`, push commit and tag, Ctrl-C and `just doit` on the Mini. `pbs.env` already holds
+  the Google values and `PBS_ALLOWED_EMAIL`.
+
+Verify:
+1. `/ping` answers `ok`; `https://pbs.tarnvik.com/` loads for a browser that is not logged in, with no detour via
+   Google.
+2. `curl -si https://pbs.tarnvik.com/api/protected/ping` → 401; `/v3/api-docs` → 404.
+3. **On the phone:** "Logga in" → Google → `/#/upload`. The session cookie (DevTools on the dev machine, if not on
+   the phone) is `HttpOnly`, `Secure`, `SameSite=Lax`. "Logga ut" → logged out.
+4. **A second Google account is refused:** it lands on `/#/denied`, and the menu still shows "Logga in".
+5. A restart of pbs logs the owner out (sessions are in memory), as designed.
 
 ### Functionality
 

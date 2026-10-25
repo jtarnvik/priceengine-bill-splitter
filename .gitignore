@@ -35,8 +35,8 @@ build/
 # macOS
 .DS_Store
 
-# Local development (secrets, from phase 3)
-application-local.properties
+# Local development secrets (see application-local.properties)
+local-secrets.properties
 
 # Deployment (just / Mac Mini)
 release/

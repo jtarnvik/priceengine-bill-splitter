@@ -12,11 +12,17 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    // Fixed, because Google's dev redirect URI names :5173 (phase 3); a silent move to :5174 would break login.
+    // Fixed, because Google's dev redirect URI names :5173; a silent move to :5174 would break login.
     port: 5173,
     strictPort: true,
+    // The auth paths too, so that dev is single-origin like production. Spring builds the OAuth2 redirect URI from
+    // the request's Host header, which changeOrigin: false leaves at localhost:5173: Google then sends the browser
+    // back through this proxy, and the session cookie belongs to :5173.
     proxy: {
-      '/api': 'http://localhost:8082',
+      '/api': { target: 'http://localhost:8082', changeOrigin: false },
+      '/oauth2': { target: 'http://localhost:8082', changeOrigin: false },
+      '/login/oauth2': { target: 'http://localhost:8082', changeOrigin: false },
+      '/logout': { target: 'http://localhost:8082', changeOrigin: false },
     },
   },
 });

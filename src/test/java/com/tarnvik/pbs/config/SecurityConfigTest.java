@@ -1,0 +1,125 @@
+package com.tarnvik.pbs.config;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * The security rules, against the real filter chain. A logged-in owner is simulated with oidcLogin(), whose principal
+ * is an OidcUser like the one Google login produces; that is what AuthController reads.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class SecurityConfigTest {
+  private static final String OWNER_EMAIL = "owner@example.com";
+
+  @Autowired MockMvc mockMvc;
+
+  @Test
+  void protectedEndpoint_anonymous_gets401NotRedirect() throws Exception {
+    mockMvc.perform(get("/api/protected/ping").accept(MediaType.TEXT_HTML))
+      .andExpect(status().isUnauthorized())
+      .andExpect(header().doesNotExist("Location"));
+  }
+
+  @Test
+  void protectedEndpoint_anonymousPost_gets401() throws Exception {
+    mockMvc.perform(post("/api/protected/ping"))
+      .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void protectedEndpoint_owner_getsThrough() throws Exception {
+    mockMvc.perform(get("/api/protected/ping").with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andExpect(content().string("ok"));
+  }
+
+  @Test
+  void me_anonymous_gets401() throws Exception {
+    mockMvc.perform(get("/api/auth/me"))
+      .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void me_owner_getsEmail() throws Exception {
+    mockMvc.perform(get("/api/auth/me").with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.email").value(OWNER_EMAIL));
+  }
+
+  /** Even for a browser navigation, which anywhere outside /api/** would be redirected to Google. */
+  @Test
+  void unknownApiPath_anonymousBrowser_gets401NotRedirect() throws Exception {
+    mockMvc.perform(get("/api/anything").accept(MediaType.TEXT_HTML))
+      .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void publicEndpoints_anonymous_areOpen() throws Exception {
+    mockMvc.perform(get("/ping"))
+      .andExpect(status().isOk());
+    mockMvc.perform(get("/api/public/events"))
+      .andExpect(status().isOk());
+  }
+
+  /**
+   * Whether the files exist depends on whether the frontend was built (not with -Dskip.npm), so the test asserts
+   * only what security decides: no redirect to Google.
+   */
+  @Test
+  void staticFiles_anonymous_areNotRedirected() throws Exception {
+    for (String path : new String[] {"/", "/index.html", "/assets/index.js", "/icon.svg"}) {
+      MvcResult result = mockMvc.perform(get(path).accept(MediaType.TEXT_HTML)).andReturn();
+      assertThat(result.getResponse().getStatus()).as(path).isIn(200, 404);
+    }
+  }
+
+  @Test
+  void favicon_anonymous_gets404() throws Exception {
+    mockMvc.perform(get("/favicon.ico").accept(MediaType.TEXT_HTML))
+      .andExpect(status().isNotFound());
+  }
+
+  /** A browser navigation (Accept: text/html): oauth2Login redirects only those, and answers anything else 401. */
+  @Test
+  void otherPath_anonymousBrowser_isRedirectedToGoogleLogin() throws Exception {
+    mockMvc.perform(get("/somewhere").accept(MediaType.TEXT_HTML))
+      .andExpect(status().isFound())
+      .andExpect(header().string("Location", "/oauth2/authorization/google"));
+  }
+
+  @Test
+  void logout_owner_getsOkNotRedirect() throws Exception {
+    mockMvc.perform(post("/logout").with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andExpect(header().doesNotExist("Location"));
+  }
+
+  @Test
+  void openApiSpec_isOffOutsideLocal() throws Exception {
+    mockMvc.perform(get("/v3/api-docs"))
+      .andExpect(status().isNotFound());
+  }
+
+  private static RequestPostProcessor ownerLogin() {
+    return oidcLogin().idToken(token -> token.claim(StandardClaimNames.EMAIL, OWNER_EMAIL));
+  }
+}

@@ -1,5 +1,6 @@
 import { createHashRouter, RouterProvider } from 'react-router-dom';
 
+import { DeniedPage } from './views/denied-page.tsx';
 import { Layout } from './views/layout.tsx';
 import { PublicPage } from './views/public-page.tsx';
 import { UploadPage } from './views/upload-page.tsx';
@@ -11,6 +12,7 @@ const router = createHashRouter([
     children: [
       { path: '/', element: <PublicPage /> },
       { path: '/upload', element: <UploadPage /> },
+      { path: '/denied', element: <DeniedPage /> },
     ],
   },
 ]);
