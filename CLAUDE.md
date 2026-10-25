@@ -442,7 +442,7 @@ Steps 1.4, 1.5 and 1.9 do not depend on the code and can be done while 1.1 is be
 is the one in which each check builds on the previous: DNS, then Caddy, then the app, so that when something
 fails, the last step taken is the suspect.
 
-**1.1 The app and its deploy files** — Claude
+**1.1 The app and its deploy files** — Claude ✅
 - `HealthController` (`port.incoming.rest`): `GET /ping` → `ok`, as in publicbackend, with a `@WebMvcTest`.
 - `server.port=8082` in `application.properties`, so every profile binds it.
 - `application-production.properties`: banner off, file logging to `${FOLDER_BASE}/logs/pbs.log`,
