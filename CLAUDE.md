@@ -580,7 +580,7 @@ Verify:
 2. Once, deliberately: stop pbs (Ctrl-C), wait for the Down alert to actually arrive, then `just start` and wait
    for Up. UptimeRobot is the only thing that will report pbs down, so the alert path is worth seeing work.
 
-**1.9 Google OAuth client** — owner, Google Cloud Console (used from phase 3)
+**1.9 Google OAuth client** — owner, Google Cloud Console (used from phase 3) ✅
 - In the commuter app's project: Google Auth Platform → Clients → Create client (in the older UI: APIs &
   Services → Credentials → Create credentials → OAuth client ID). Type *Web application*, name `pbs`, no
   JavaScript origins, and exactly the two redirect URIs under Authentication.
