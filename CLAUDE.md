@@ -559,7 +559,7 @@ Verify, with `npm run dev` (Vite on :5173):
 4. DevTools at 375 px wide (iPhone SE): whether the name fits is noted for a decision, not fixed in this step.
    It fits (2026-10-25). Should it ever not, it is cut with an ellipsis, keeping the menu button on the bar.
 
-**2.3 The stream, backend** — Claude
+**2.3 The stream, backend** — Claude ✅
 - An emitter registry in `port.outgoing.sse`, copied from overlord's `SseNotificationProvider` mechanics: 24 h
   emitter timeout, `: ping` comment every 20 s, dead emitters dropped on a failed send.
 - **The current state is the first event on every connection**, sent before the emitter is returned.
@@ -570,24 +570,35 @@ Verify, with `npm run dev` (Vite on :5173):
   `@EnableScheduling` for the heartbeat.
 - `GET /api/public/events` (`text/event-stream`) in `port.incoming.rest`.
 - A `@WebMvcTest`: the stream starts asynchronously and its first event carries the count.
+- **All streams are closed on `ContextClosedEvent`.** It comes before the web server's graceful shutdown, which
+  otherwise waits its full 30 s for these never-ending responses — on every deploy with a phone on the page.
 
 Verify, on the dev machine:
 1. `curl -N localhost:8082/api/public/events` prints `event:viewers` and `data:{"viewers":1}` at once, then
    `:ping` every 20 s.
-2. A second `curl -N` in another terminal: both print `{"viewers":2}`. Ctrl-C the second: within 20 s the first
-   prints `{"viewers":1}` — pruning, found at the next heartbeat.
+2. A second `curl -N` in another terminal: both print `{"viewers":2}`. Ctrl-C the second: within 40 s the first
+   prints `{"viewers":1}` — pruning, found at the second heartbeat after the close. (The first write to a closed
+   connection usually succeeds; only the next one fails.)
+3. Ctrl-C pbs with a `curl -N` connected: it stops at once, not after 30 s. Without the `ContextClosedEvent`
+   listener the log says `Graceful shutdown aborted with one or more requests still active` (tried, 2026-10-25).
 
 **2.4 The stream, frontend** — Claude
 - Redux store holding only the RTK Query api; the base api and `axiosBaseQuery` copied from overlord.
 - The stream as an RTK Query streaming endpoint: `onCacheEntryAdded` opens the `EventSource`, writes each event
   with `updateCachedData`, reopens it on `visibilitychange` when it is `CLOSED`, closes it when the cache entry
   goes. The payload type is a hand-written interface (springdoc arrives in phase 3).
+- **Retry after a failed connection, not only on `visibilitychange`.** `EventSource` reconnects by itself after a
+  dropped stream, but gives up for good (`CLOSED`) when a reconnect gets a non-200 answer — which is exactly what
+  Cloudflare's 502 is while pbs restarts during a deploy. So on `CLOSED`, reopen after a delay that grows to a cap
+  (a few seconds up to about 30 s); otherwise every open page stops updating after each deploy until its phone
+  is locked and unlocked.
 - The public page shows the viewer count in its card, plus a small connection status line ("Ansluten",
   "Återansluter …") — temporary, for watching the reconnect; it goes when phase 5 replaces the payload.
 
 Verify, with `npm run dev`:
-1. One tab shows 1; a second tab makes both show 2 at once; closing one makes the other show 1 within 20 s.
-2. Stop the backend: the status line changes. Start it again: the page reconnects by itself and shows the count.
+1. One tab shows 1; a second tab makes both show 2 at once; closing one makes the other show 1 within 40 s.
+2. Stop the backend: the status line changes. Start it again: the page reconnects by itself and shows the count
+   — through the Vite proxy, which answers 502 while the backend is down, the same case as Cloudflare's.
 
 **2.5 Release `v0.2.0` and the phone test** — owner, with Claude preparing
 - `./change-version.sh 0.2.0`, push, then Ctrl-C and `just doit` on the Mini. The first build there downloads
@@ -600,7 +611,7 @@ Verify:
 3. **Quiet longer than 100 s survives:** that `curl` left running for five minutes is still connected.
 4. **On the phone, mobile data:** the page shows the count; opening it on the dev machine as well makes the phone
    show one more within a second or two.
-5. **Lock and unlock:** lock the phone for a minute — the dev machine's count drops within 20 s; unlock — the
+5. **Lock and unlock:** lock the phone for a minute — the dev machine's count drops within 40 s; unlock — the
    phone reconnects and both show it back.
 6. The manual's "Confirm Server-Sent Events stream through Cloudflare unbuffered" checklist item can be ticked.
 

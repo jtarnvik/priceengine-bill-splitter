@@ -42,6 +42,15 @@
 
     <build>
         <plugins>
+            <!-- Test output (Spring's startup logs and the like) goes to target/surefire-reports/<test>-output.txt,
+                 so the console shows only the results. As in publicbackend and overlord. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
