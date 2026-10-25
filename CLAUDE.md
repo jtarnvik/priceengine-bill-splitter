@@ -601,8 +601,9 @@ Verify:
 - Reduce this plan to what exists and why, tick the manual's "pbs Setup Checklist" (its SSE item stays open for
   phase 2, the Anthropic key for phase 4), including "Log retention: add `pbs` as a service", remove
   "(planned)" from pbs's row in the manual's log-retention services table, and set Status to phase 2.
-- In the manual's Caddyfile section, replace the planned pbs block with the real one: `reverse_proxy 127.0.0.1:8082`, not
-  `localhost:8082`. pbs binds IPv4 loopback only (1.1), and `localhost` can also resolve to `::1`.
+- In the manual's Caddyfile section, replace the planned pbs block with the real one:
+  `reverse_proxy 127.0.0.1:8082`, not `localhost:8082`. pbs binds IPv4 loopback only (1.1), and `localhost` can
+  also resolve to `::1`.
 
 **Phase 2 - A two-page shell.** The one-jar build and the frontend frame, with placeholder content.
 - `frontend-maven-plugin` with pinned Node/npm, Vite output into `target/classes/static`, `mvn verify` producing
