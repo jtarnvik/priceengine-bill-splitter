@@ -536,7 +536,7 @@ Verify, on the Mini:
 2. `curl -s localhost:8082/ping` → `ok`.
 3. `ls -l deployment/pbs.env` → `-rw-------`.
 
-**1.6a Join log retention** — owner, on the Mini, right after 1.6
+**1.6a Join log retention** — owner, on the Mini, right after 1.6 ✅ (with the stack's lag deferred)
 Needs 1.6 because pbs must have written its log folder first; if Docker is pointed at a folder that does not
 exist, it creates an empty one in its place.
 - Confirm the real log path: `ls <clone>/deployment/logs/pbs.log`. If it differs from the path in the manual's
@@ -557,22 +557,10 @@ Verify, on the Mini (Grafana and the Alloy UI addresses are in the manual):
    lines appear. *Only the first request after a start logs anything;* a second curl adds nothing, and neither
    would a curl without the restart, since 1.6 already made the first request.
 
-**1.6a status, 2026-10-25 — paused mid-investigation.** Edits made and applied (backups `*.bak-pbs` next to
-both files); verify 1–3 passed, including thread names with dots. Verify 4 failed: the shutdown lines of the
-old process reached Grafana within seconds, but the startup lines of the restarted process (PID 36360, line 14
-on) never did. Findings: the file on the Mini and the file seen inside the alloy container are identical (3645
-bytes, both runs present), yet Alloy's read position (`data/alloy/loki.source.file.pbs/positions.yml`) is stuck
-at 2579 — the end of the shutdown lines — with nothing logged by Alloy. Hypothesis, unproven: Alloy's tailer
-misses a file that is closed and reopened by a new host process, through Docker Desktop's file sharing.
-To resume:
-1. **Before any curl:** compare `positions.yml` with the file size. Anything reaching pbs.tarnvik.com since
-   (a bot, a scanner) makes pbs log its first request, so the experiment may already have run by itself.
-2. Experiment 1: `curl -s localhost:8082/ping` once, wait 10 s, compare position and size again. Position
-   catches up → a one-off hiccup. Position stays → the tailer is stuck on the file.
-3. Experiment 2, only if stuck: `docker compose restart alloy`, then compare again; it should resume from 2579.
-4. Open question for the owner: did publicbackend's startup lines reach Grafana after any restart since the stack
-   was set up? If every restart of every service loses its lines, it is a stack issue for the manual, not pbs's,
-   and the check in 1.10 changes.
+**1.6a outcome, 2026-10-25.** Verify 1–3 passed, including thread names with dots. Verify 4 passed only
+eventually: every line reaches Grafana, but the startup lines took about three hours. The cause is in the
+log-retention stack, not in pbs, and affects every service on it — see "After the project" at the end of this
+file. pbs's side (the file, its format, the Alloy block) is done; the stack's lag is deferred.
 
 **1.7 End to end** — owner
 Verify:
@@ -612,7 +600,8 @@ Verify:
 1. The startup log shows `v0.1.1`, and `deployment/bin/` holds `Version-0.1.1.txt`.
 2. `curl -s https://pbs.tarnvik.com/ping` from off the Mini → `ok`.
 3. In Grafana, `{service="pbs"} |= "Starting PbsApplication"` over the last day shows both the `v0.1.0` and the
-   `v0.1.1` startup lines — the logs outlive a redeploy.
+   `v0.1.1` startup lines — the logs outlive a redeploy. Until the stack's lag is fixed (see "After the
+   project"), the newest lines can take hours to arrive: check the next day if `v0.1.1` is missing.
 
 **1.11 Wrap-up** — Claude
 - Reduce this plan to what exists and why, tick the manual's "pbs Setup Checklist" (its SSE item stays open for
@@ -660,3 +649,35 @@ the dummy counter on the SSE stream, the public page showing per-person items an
 **Phase 6 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
 **Phase 7 - Phone polish.** Layout at 375 px, tap targets, empty states.
+
+---
+
+## After the project
+
+Things found along the way that belong to something other than pbs, to fix once the phases are done.
+
+### Log-retention lag — Docker Desktop's file sharing
+
+**Found in 1.6a, 2026-10-25.** Lines reach Grafana, but sometimes tens of minutes or hours late — pbs's
+startup lines took about three hours, and publicbackend's lines were more than 20 minutes behind on the same
+day. Nothing is lost. The lines hit hardest are the last ones before a service goes quiet, which are the ones
+wanted after a crash.
+
+**Cause, established by experiment.** Alloy runs in a container and reads the logs through Docker Desktop's
+file sharing. For a log file that a host process keeps open and appends to, while Alloy holds it open inside the
+container, the container's view of the file can stay stale: its size and modification time freeze, and Alloy
+cannot read what the container does not see. Alloy itself delivers everything the container sees — Grafana
+stopped exactly where the container's view of the file stopped. A fresh file, appended to with `echo` and read
+with a new `ls` each time, showed the change within a second, so the sharing is not slow in general.
+
+*A misleading signal:* Alloy's `positions.yml` lags behind what has been delivered, so it is no measure of how
+far Alloy has got. Compare the file's size on the host with its size inside the container instead.
+
+**Fix, to be decided.** It belongs to the log-retention stack and the manual, not to pbs:
+- **Run Alloy natively on the Mini (Homebrew)** instead of in Docker — the preferred option, since it removes
+  file sharing from the log path entirely.
+- Or switch Docker Desktop's file-sharing implementation (Settings → General) and test again. Cheaper, but it
+  replaces one layer with another.
+
+Either way, the check afterwards is the one that found it: append a line to a service's log on the host, and
+see it in the container (`ls -l` on both sides) and in Grafana within seconds — repeatedly, over an afternoon.
