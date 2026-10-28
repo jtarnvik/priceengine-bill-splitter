@@ -37,7 +37,7 @@ writing the copy, and adapt rather than reinvent.
 | OAuth2 security config | `../publicbackend/src/main/java/com/tarnvik/publicbackend/config/SecurityConfig.java` | 3 |
 | Login state in React | `../sl-dashboard/src/hook/use-user.ts` and the `user` handling in `App.tsx` | 3 |
 | Anthropic Java SDK usage | `../publicbackend/src/main/java/com/tarnvik/publicbackend/commuter/port/outgoing/rest/claude/ClaudeProvider.java` | 4 |
-| Terminal dashboard | `../publicbackend/src/main/java/com/tarnvik/publicbackend/commuter/port/outgoing/terminal/` and `port/incoming/scheduled/DashboardRefreshJob.java`; its `CLAUDE.md` sections "Terminal dashboard" and "Logging"; overlord's dashboard, which it is modelled on | 8 |
+| Terminal dashboard | `../publicbackend/src/main/java/com/tarnvik/publicbackend/commuter/port/outgoing/terminal/` and `port/incoming/scheduled/DashboardRefreshJob.java`; its `CLAUDE.md` sections "Terminal dashboard" and "Logging"; overlord's dashboard, which it is modelled on | 10 |
 
 **Do not `@`-import publicbackend's `CLAUDE.md`** the way sl-dashboard does. Most of it is GTFS and commuter
 history that has nothing to do with this project and would only crowd the context. Copy what applies into this
@@ -46,17 +46,17 @@ file instead.
 What *not* to copy from publicbackend: Spring Session JDBC, `SameSite=None`, the CORS configuration and its
 two frontend-origin properties, the pending-user flow in the success handler, Liquibase. Each exists there
 because of a separate frontend origin or a database, and pbs has neither. The terminal dashboard *is* copied,
-but last (phase 8).
+but last (phase 10).
 
 ## Status
 
-**Phases 1 and 2 done (2026-10-25); phase 3 done but for 3.5, a small security-config fix, which is built and
-waits for its release as `v0.3.1`.** pbs `v0.3.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare
-and Caddy, monitored by UptimeRobot, its log collected by the log-retention stack. It serves the React shell from
-the jar — header, menu, the two placeholder pages — and the live stream with its dummy viewer count, proven over
-Cloudflare and on a phone, and the owner logs in and out with Google. The design below was worked out in one
-discussion (October 2026) before the repository existed. Treat it as decided unless a step proves it wrong, and
-"Phases, in order" as the plan. Remove planning text from this file as it is carried out, keeping the "why" notes.
+**Phases 1, 2 and 3 done (2026-10-25 to 2026-10-28); phase 4 planned (2026-10-28), not started.** pbs `v0.3.1`
+runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log
+collected by the log-retention stack. It serves the React shell from the jar — header, menu, the two placeholder
+pages — and the live stream with its dummy viewer count, proven over Cloudflare and on a phone, and the owner logs
+in and out with Google. The design below was worked out in one discussion (October 2026) before the repository
+existed. Treat it as decided unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning
+text from this file as it is carried out, keeping the "why" notes.
 
 **Base structure before functionality.** The first three phases build and prove the frame — infrastructure,
 a two-page shell, login — and contain no receipt, split or Claude code at all. Nothing functional starts until
@@ -77,11 +77,14 @@ their running totals update live on a public page. They can change nothing; if t
 at the table and the owner fixes it.
 
 A learning project first — Spring Boot 4, a React app served from the same jar, Server-Sent Events, the Anthropic
-Java SDK — and deliberately small: four hardcoded people, one receipt at a time, nothing stored.
+Java SDK — and deliberately small: four hardcoded people, one receipt at a time, nothing stored but the
+recordings of parses (see Recording and canned responses).
 
 - **No database.** All state is in memory and lost on restart, which is accepted: a split lives for one dinner.
 - **One receipt at a time.** Uploading a new one replaces the old.
-- **The four people are hardcoded**, first names only, in `application.properties`.
+- **The four people are hardcoded**, first names only, in `application.properties`: Jesper, Anders, Anna and
+  Kia. *Later, perhaps:* the owner changes them in the app. The browser therefore fetches them from the backend
+  (phase 6) rather than having them built in.
 - **The repository is public.** Nothing in it may identify the owner beyond what a first name does: the allowed
   Google email, the client secret and the Anthropic key all come from the environment.
 
@@ -202,6 +205,12 @@ Two more found while building it:
   that forward too. Unpermitted, an anonymous `/favicon.ico` got a redirect to Google instead of its 404.
 - **oauth2Login redirects only browser navigations** (`Accept: text/html`); anything else outside `/api/**` gets
   401 as well. A MockMvc test of the redirect must send that header.
+- **No request cache** (`NullRequestCache`). By default a refused request is saved in a new session, to return
+  to after login. pbs never uses it — a login always lands on `/#/upload` — yet every visitor's page calls
+  `/api/auth/me`, so each friend, and any bot, held a 30-minute session in memory for nothing (found in
+  production, fixed in `v0.3.1`). Starting a login still creates a session, as it must: the OAuth2 `state` lives
+  there. Its test asserts that no session exists rather than that no cookie is set, because MockMvc never writes
+  `JSESSIONID` and a cookie assertion would pass without the fix.
 
 springdoc's paths (`/v3/api-docs/**`, `/swagger-ui/**`) are permitted too, so that codegen can read the spec
 without a login; outside `local` they do not exist and answer 404.
@@ -321,53 +330,105 @@ interpretation.
 
 ### In the browser, before upload
 
-**Downscale the photo on a `<canvas>` to about 2000 px on the long edge and export JPEG.** One step solves four
-problems:
+**Downscale the photo on a `<canvas>` to 2576 px on the long edge and export JPEG.** 2576 px is the most current
+models use, so nothing the model could read is lost, and a long receipt photographed whole has small print. It
+costs at most about 4,800 image tokens, some 2 US cents. One step solves four problems:
 
 - **Size.** A phone photo is several MB — over Spring's 1 MB multipart default and needlessly large for the API.
-  Current models use at most 2576 px on the long edge anyway.
 - **HEIC.** iPhones shoot HEIC, which the API does not accept (JPEG, PNG, GIF, WebP). The canvas always emits
   JPEG.
 - **EXIF.** The canvas drops metadata, GPS included — which matters the day a receipt is photographed at home.
-- **Speed.** A few hundred KB uploads quickly over mobile data at the table.
+- **Speed.** Well under a couple of MB uploads quickly over mobile data at the table.
 
-Still set `spring.servlet.multipart.max-file-size` (and `max-request-size`) to a few MB as headroom.
+Still set `spring.servlet.multipart.max-file-size` (and `max-request-size`) to 10 MB as headroom.
+
+**One button for camera and photo library.** A plain `<input type="file" accept="image/*">`, without `capture`:
+on iOS it opens the system menu offering "Ta bild" and "Fotobibliotek". `capture` would allow the camera only.
+Decode through an `<img>` and `drawImage` onto a canvas of the target size, never a canvas of the photo's own size:
+iOS limits canvas area, and a 48 MP photo exceeds it.
 
 ### The Claude call
 
-- Anthropic Java SDK (`com.anthropic:anthropic-java`), model `claude-opus-5-5`. A receipt costs a few cents.
-- **Structured output, typed.** `MessageCreateParams.builder()...outputConfig(Receipt.class)` gives a
-  `StructuredMessageCreateParams<Receipt>` and the response comes back as that class. Jackson's
+- Anthropic Java SDK (`com.anthropic:anthropic-java`), **model `claude-opus-5-5`, effort `medium`** (decided
+  2026-10-28). *Why the most capable model:* a misread price is the error that matters, and at one receipt per
+  dinner the cost does not — about 5–10 US cents a receipt (an image of at most ~4,800 tokens plus the prompt in,
+  1,000–4,000 tokens out with thinking), against half that on Sonnet 5.5 and well under a cent on Haiku 5.5. The
+  recordings make a measured comparison cheap later: the same images through another model or effort, for öre.
+- **Structured output, typed.** `MessageCreateParams.builder()...outputConfig(ParsedReceipt.class)` gives a
+  `StructuredMessageCreateParams<ParsedReceipt>` and the response comes back as that class. Jackson's
   `@JsonPropertyDescription` on the fields becomes part of the schema, so the instructions about each field live
   next to the field.
 - **Thinking cannot be disabled on Opus 5.5** and effort defaults to `medium` — set effort explicitly rather than
   relying on the default.
+- **Timeout 90 s** on the client, below Cloudflare's 100 s, so a slow parse ends in an error message rather than
+  a 524. A parse is expected to take 10–30 s, synchronously.
 - **Check `stop_reason` before reading the content.** A `refusal` is unlikely for a receipt but has to produce an
-  error message, not a crash.
+  error message, not a crash. *No refusal fallback* (the API's retry on another model): it needs the beta API, for
+  a case that should not happen with a receipt.
 
 ### The schema
 
 - **Money as integer öre (`long`)**, never `double`, in the schema as well as in Java, so the model never answers
   `24.999999`.
-- **One row per unit.** "3 × Öl 237 kr" must come back as three rows of 79 kr, stated in both the prompt and the
-  field description. *Why:* the split divides an item evenly between the people ticked, so a quantity line where
-  one person had one beer and another had two cannot be expressed. Three rows can.
+- **One row per receipt line, quantities kept together** (decided 2026-10-28, replacing "one row per unit"). "3 ×
+  Öl 180 kr" is one row with quantity 3, unit price 60 kr and price 180 kr. **The line's price is the one that
+  counts** — it is what the receipt states and what is split; quantity and unit price are information. *Accepted
+  limitation:* one person having two of the beers and another one cannot be expressed. Kept in the schema so that
+  it can be, should it ever matter.
+- **An unpriced line belongs to the item above it**, as its note ("utan lök"). A line with its own price, even an
+  addition to a dish, is an item of its own.
 - **The receipt's own total** (the "Att betala" line) as a separate field.
 - **Discounts and rounding lines as their own field**, not as negative items. They are the usual reason the items
   fail to add up, and they are spread differently (see The split).
+
+What Claude answers, `ParsedReceipt`:
+
+```
+restaurantName  String
+total           long     the "Att betala" line, öre
+items[]         name     String
+                quantity int, at least 1
+                unitPrice Long, öre, null when the receipt shows none
+                price    long, öre, the line total — the one that counts
+                note     String, null when there is none
+adjustments[]   name, amount (long, öre, negative for a discount; öresavrundning too)
+```
+
+What the browser gets, `Receipt`: a `receiptId` (a UUID, new on every upload), the same fields, and an `id` per
+item. **Item ids are numbers 1, 2, 3 … in receipt order, never reused**: a row added by hand in phase 8 takes the
+next number, so an id stays valid when rows are removed, which an index would not. The list's order is the
+receipt's; the id does not define it. The friends never see the ids.
 
 ### The sum check
 
 **Compare the items plus discounts against the receipt's own total in Java, and show a warning when they
 differ.** A misread price is the error that actually matters in a bill splitter, and this catches it without
-trusting the model. The owner then corrects the row (phase 6) rather than taking a new photo.
+trusting the model. The owner then corrects the row (phase 8) rather than taking a new photo.
 
 Use the **pre-payment check** where possible: it carries the place and the items and nothing else — no card
 digits, and no tip to complicate the total.
 
+### Recording and canned responses
+
+**Every real parse is recorded**, because each one costs money and the recordings are what development runs on.
+
+- A recording is the downscaled JPEG as uploaded and a JSON file holding Claude's answer (`ParsedReceipt`, before
+  numbering), the model, the effort, the token counts and the time taken — in `pbs.recording-dir`:
+  `recordings/` in the project root in development, `deployment/recordings/` on the Mini. Both gitignored.
+- **Production records too.** Real receipts come from dinners; the owner copies recordings from the Mini to the dev
+  machine to develop against them.
+- **`pbs.receipt-parser=claude|canned`**, `claude` by default. The canned parser answers with the recordings in
+  name order, a different one per upload, so that reset and a new upload show a new receipt, after a second's
+  pause, so that the waiting state can be seen. `local` uses `canned` once there are recordings.
+- The canned parser reads the same `ParsedReceipt` JSON that Claude answered, so numbering, the sum check and the
+  event run on it exactly as on a real parse.
+- **Real recordings are not committed.** The repository is public, and a folder of receipts says where the owner
+  eats. Tests use small hand-written receipts.
+- *Later, perhaps:* run the stored images through another model or effort and compare the answers.
+
 ## The split
 
-The owner's page is a table: one row per item, four checkboxes per row, one per person.
+The owner's page is a list: one row per item, four checkboxes per row, one per person (see The two pages).
 
 - **An item is divided evenly between the people ticked.** One tick is a personal item, several is shared. No
   tick is unassigned.
@@ -381,23 +442,25 @@ The owner's page is a table: one row per item, four checkboxes per row, one per 
 - **Discounts are spread in proportion to each person's subtotal.** Unassigned items count as a fifth bucket
   while the owner is still ticking, so the numbers always add up.
 - **A tip is not on the pre-payment check.** If one is ever wanted, it is a row added by hand and split through
-  the same checkboxes (phase 6).
+  the same checkboxes (phase 8).
 
 ### The assignment request
 
 **Send the full set of people for a row, never a toggle:**
-`PUT /api/protected/items/{index}/assignees` with `{"receiptId": "...", "people": ["Anna", "Erik"]}`.
+`PUT /api/protected/items/{id}/assignees` with `{"receiptId": "...", "people": ["Anna", "Kia"]}`.
 *Why:* a toggle depends on the order requests arrive in. Two quick taps over a poor connection, with one retried
 or reordered, leaves the box the opposite of what the screen shows. Setting the whole set gives the same result
 however often it arrives.
 
 `receiptId` is regenerated on each upload, and a request carrying an old one gets 409. Otherwise a second open
-tab could apply ticks meant for the previous receipt to the new one by row index.
+tab could apply ticks meant for the previous receipt to the new one by item id.
 
 ### State
 
 The whole split is one immutable record — receipt id, items with their assignees, totals — in an
-`AtomicReference`. Every change builds a new record, swaps it in and broadcasts it. Only the owner writes, so
+`AtomicReference`, empty when there is no receipt. Every change builds a new record, swaps it in and broadcasts it.
+**Reset empties it on the server** (`DELETE /api/protected/receipt`), for every phone, not only on the owner's
+screen: a reset only in the browser would be undone by the next reconnect's state-on-connect. Only the owner writes, so
 there is no contention to design for, and an immutable snapshot can be serialised for every listener with no
 locking.
 
@@ -411,12 +474,13 @@ for the backend — copy the mechanics.
 signals and the browser refetches, which is why its `live-updates.tsx` needs throttles and a `refreshAll()` on
 every reconnect. Here the whole state is a few hundred bytes, so each event carries all of it.
 
-**Two named events, one per kind of change** (`event: receipt` and `event: split`; names and payloads settled in
-phase 4). Each still carries the whole of its part, so the rule above holds per event.
-- **`receipt`** — a new receipt has been parsed: the restaurant, the items, the receipt's total. Sent on upload.
-  The public page can greet it with an animation (decided later).
+**Two named events, one per kind of change** (`event: receipt`, settled in phase 4, and `event: split`, in phase
+6). Each still carries the whole of its part, so the rule above holds per event.
+- **`receipt`** — `{"receipt": Receipt}` when a receipt has been parsed, `{"receipt": null}` after a reset. Sent on
+  upload and reset. The public page greets a new one by showing its rows one by one (phase 5). A new `receiptId`
+  clears the split held in the browser.
 - **`split`** — who had what changed: the assignments and the totals that follow from them. Sent on every tick of
-  a checkbox, and on corrections (phase 6). It carries the `receiptId`, so a phone that somehow holds an older
+  a checkbox, and on corrections (phase 8). It carries the `receiptId`, so a phone that somehow holds an older
   receipt ignores it rather than applying ticks to the wrong rows.
 - **The animation keys on a *new `receiptId`*, not on the `receipt` event arriving.** State-on-connect sends the
   `receipt` event again on every reconnect, and a phone that wakes from its lock screen must not replay the
@@ -425,9 +489,11 @@ phase 4). Each still carries the whole of its part, so the rule above holds per 
   changes constantly, and the page reacts differently to each. Splitting by kind keeps the frequent event small
   and makes "a new receipt arrived" something the page is told rather than has to work out.
 
-- **Send the current state as the first events on connect** — `receipt`, then `split`, when there is a
-  receipt. A reconnect is then indistinguishable from a first connect, nothing on the phone ever fetches, and
-  the response starts at once rather than idling towards Cloudflare's 100 s limit.
+- **Send the current state as the first events on connect** — `receipt` always, `{"receipt": null}` when there
+  is none, then `split` when there is a receipt. A reconnect is then indistinguishable from a first connect,
+  nothing on the phone ever fetches, and the response starts at once rather than idling towards Cloudflare's
+  100 s limit. *Why `receipt` even when empty:* a phone locked through a reset would otherwise reconnect to
+  silence and keep showing the old receipt.
 - **Keep the heartbeat** (`: ping` every 20 s), for Cloudflare's idle timeout.
 - **Phones lock their screens mid-dinner.** iOS suspends the page and the connection dies; overlord's
   `live-updates.tsx` already notes that iOS can give up for good (`readyState` stuck at `CLOSED`). On
@@ -487,17 +553,41 @@ stack, so its files are the reference (see Reference implementations).
 ## The two pages
 
 **`/#/` — public, read-only.** What the friends watch.
-- Each person's items, not only their total. The point is for friends to catch the owner's mistakes, and a total
-  alone says something is wrong without saying what.
-- Each person's rounded total, the receipt total, the sum of the rounded totals, and the **unassigned** amount —
-  so the arithmetic is visible and shows how far the owner has got.
-- An empty state ("Inget kvitto ännu") for before the first upload and after a restart.
+- **The restaurant as a heading, then the items not yet assigned**, in receipt order, and a last row "Kvar att
+  dela på" (phase 5). An item leaves the list when the owner assigns it (phase 6), so the list shrinks to nothing
+  as the split is done.
+- Each person's rounded total, updated with every tick, and the receipt total next to the sum of the rounded
+  totals — so the arithmetic is visible and shows how far the owner has got.
+- *To decide in phase 6:* whether an assigned item reappears under each person it was assigned to. The first
+  design wanted each person's items, not only their total, so that friends can catch the owner's mistakes — a
+  total alone says something is wrong without saying what. At the table that can also be said aloud.
+- From phase 7, a Swish button per person once the owner marks the split done.
+- An empty state ("Inget kvitto ännu") for before the first upload and after a reset or restart.
 
-**`/#/upload` — the owner, behind login.** Upload, the parsed table with its checkboxes, the sum-check warning,
-and later corrections.
-- It is filled in at the table on a phone, so four checkbox columns, a price and a name must fit in 375 px:
-  **initials as column headers**, **tap targets larger than the checkbox itself**, and item names that wrap or
-  truncate — price and checkboxes are what matter.
+**`/#/upload` — the owner, behind login.** Upload, the parsed rows with their checkboxes, the sum-check warning,
+reset, and later corrections. It draws the receipt from the stream like the public page, so a reload mid-dinner
+keeps it.
+- **Without a receipt:** one large, rounded, green button in the iOS manner, with a camera icon (see In the
+  browser, before upload). While the parse runs it says "Läser kvittot…" and cannot be tapped; a failure shows a
+  message in Swedish and the button again.
+- **With a receipt:** the restaurant, the rows, and a footer — "Totalt" and, from phase 6, "Kvar att dela på",
+  which falls as items are ticked. Then "Återställ", asking first in a `<dialog>` styled like the app. *Not
+  `window.confirm`:* it puts "pbs.tarnvik.com säger…" above the question.
+- **A row is two lines**: the name and the price; under it (phase 6) four checkboxes, each labelled with a
+  person's first name — the label is the tap target, larger than the checkbox. Quantity and unit price ("3 ×
+  60,00 kr") and a note go in small grey text under the name. Adjustments follow the items, the sum warning the
+  footer.
+- **Rows in receipt order**, never sorted; every other row lightly striped. Prices as `80,00 kr` (`sv-SE`).
+- **Layout: a `<ul>` whose every `<li>` is its own CSS grid** — `grid-cols-[1fr_auto]` for name and price,
+  `grid-cols-4` for the checkboxes. *Why the columns stay put:* the tracks are fixed fractions of the row width and
+  do not depend on content, and every row is equally wide, so the columns line up across rows without subgrid or
+  one shared grid. Prices are right-aligned with `tabular-nums`. Long names wrap (`min-w-0`, `break-words`)
+  rather than push the price out. *Why not a `<table>`:* two lines per item needs `colspan`, and auto table layout
+  sizes columns from content, so one long name moves every column. *Why not flex alone:* rows align only if every
+  width is fixed by hand.
+- **A row someone has been ticked for (phase 6) greys its name and price, not the checkboxes.** Greying the
+  whole row would read as disabled, and a shared row still takes ticks. The ticked boxes show who; the rows still
+  black are the ones left to do, which is where the eye should go.
 
 ### Look and feel — sl-dashboard's, in green
 
@@ -519,7 +609,7 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
   in the same relation as sl-dashboard's `#578ff3` and `#184fc2`. They are Tailwind theme colours in
   `index.css`, so changing the green is one line.
 - *Possibly later:* menu items to filter the public page — "Alla" or "Bara jag" and then a name. Decided once
-  phase 5 shows what that page feels like at the table.
+  phase 6 shows what that page feels like at the table.
 
 ## API
 
@@ -527,17 +617,15 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 |---|---|---|---|
 | GET | `/ping` | Public | Health check for UptimeRobot |
 | GET | `/api/auth/me` | Owner | The owner's email, or 401 |
-| GET | `/api/protected/ping` | Owner | Placeholder until phase 4, so the 401 rule guards something real |
+| GET | `/api/protected/ping` | Owner | Placeholder, removed in phase 4 once the receipt endpoints exist |
 | GET | `/api/public/events` | Public | SSE stream; current state on connect, then on every change |
-| POST | `/api/protected/receipt` | Owner | Multipart image → parse → replaces the state, broadcasts it |
-| PUT | `/api/protected/items/{index}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
+| POST | `/api/protected/receipt` | Owner | Multipart image → parse → replaces the state, broadcasts it, answers it |
+| DELETE | `/api/protected/receipt` | Owner | Reset: no receipt, broadcast to every phone |
+| GET | `/api/public/participants` | Public | The four first names (phase 6) |
+| PUT | `/api/protected/items/{id}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
 | POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
-Corrections (edit a row, add a row, remove a row) arrive with phase 6.
-
-## Open questions
-
-- The four first names, for `application.properties`.
+Corrections (edit a row, add a row, remove a row) arrive with phase 8.
 
 ---
 
@@ -573,121 +661,163 @@ dead-connection pruning working (a closed tab disappears within two heartbeats, 
 connection usually succeeds, only the next one fails), and turns a phone's lock and unlock into a visible drop and
 return. The public page's connection status line ("Ansluten", "Återansluter …") is temporary too.
 
-**Phase 3 - Login on the upload page.** The security frame, still with nothing behind it worth protecting.
-- Security config with the two gotchas above (static files permitted, 401 for `/api/**`), `SameSite=Lax`, the
-  email check in `OidcUserService`, `/api/auth/me`, logout.
-- The header menu shows "Logga in" when logged out, and "Logga ut" when logged in. The
-  public page stays open to all.
-- One placeholder protected endpoint, so the 401 rule has something real to guard before the paid endpoint
-  exists.
-- springdoc (in `local` only) and `@rtk-query/codegen-openapi`, with `/api/auth/me` as the first generated
-  endpoint — the first real JSON endpoint, since phase 2's only one is the stream, which codegen excludes.
-- Tests: anonymous access to `/api/protected/**` gets 401; a different email is refused.
-- Done when the owner can log in and out on `https://pbs.tarnvik.com` from a phone, and a second Google account
-  is refused — and the dev login through the Vite proxy works too.
-
-#### Phase 3 — step by step
-
-Planned and implemented in one go (2026-10-25), at the owner's request, from the design above; what the design
-did not settle is recorded in Authentication, Development and Frontend data layer.
-
-**3.1 Security, backend** — Claude ✅
-- `spring-boot-starter-security` and `-oauth2-client`. `SecurityConfig` with the static-file permits, `/error`,
-  401 for `/api/**`, `oauth2Login` (success to `/#/upload`, failure to `/#/denied`), logout answering 200, CSRF
-  off. `OwnerOnlyOidcUserService` compares the verified email, case-insensitively, against `pbs.allowed-email`
-  and refuses to start if it is blank.
-- `GET /api/auth/me` (`AuthController`, `MeResponse`), `GET /api/protected/ping` (placeholder).
-- `server.servlet.session.cookie.same-site=lax`; the Google registration from `GOOGLE_CLIENT_ID` and
-  `GOOGLE_CLIENT_SECRET`.
-- Tests: `SecurityConfigTest` (`@SpringBootTest`, the real chain; the owner via `oidcLogin()`, whose principal is
-  an `OidcUser` as `AuthController` expects — `@WithMockUser`'s is not) and `OwnerOnlyOidcUserServiceTest`. The
-  `@WebMvcTest`s exclude the five security auto-configurations.
-
-Verify, on the dev machine:
-1. `mvn verify` → `BUILD SUCCESS`, `Tests run: 20, Failures: 0`.
-2. `java -jar target/pbs-*.jar --GOOGLE_CLIENT_ID=x --GOOGLE_CLIENT_SECRET=x --PBS_ALLOWED_EMAIL=x@example.com`,
-   then `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Accept: text/html' localhost:8082<path>`:
-   `/`, `/index.html`, `/icon.svg` and an `/assets/` file → 200; `/favicon.ico` → 404; `/api/auth/me`,
-   `/api/protected/ping` and `/api/nothing` → 401 with no redirect; `/somewhere` → 302 to
-   `/oauth2/authorization/google`; `/v3/api-docs` → 404.
-3. `curl -sD - -o /dev/null localhost:8082/oauth2/authorization/google | grep -i set-cookie` → `SameSite=Lax`.
-4. Without `PBS_ALLOWED_EMAIL` the jar refuses to start, naming the placeholder.
-
-**3.2 springdoc and the generated client** — Claude ✅
-- `springdoc-openapi-starter-webmvc-ui` 3.1.1 (overlord's; 3.2.0 was a day old), off in `application.properties`,
-  on in the tracked `application-local.properties`, which also imports `local-secrets.properties`.
-- `@rtk-query/codegen-openapi`, `openapi-config.cjs` copied from overlord (port 8082, `events` excluded by tag),
-  `npm run generate-api`, `generated-api.ts` committed. `ajv` 8 as a devDependency (see Build).
-
-Verify:
-1. Backend in `local`: `curl -s localhost:8082/v3/api-docs` lists `/api/auth/me` (`getMe`, tag `auth`) and
-   `MeResponse` with `email` under `required`; `http://localhost:8082/swagger-ui.html` opens.
-2. `npm run generate-api` in `frontend/` → `Done`, and `git status` shows `generated-api.ts` unchanged.
-
-**3.3 Login state in the frontend** — Claude ✅
-- Vite proxies `/oauth2`, `/login/oauth2` and `/logout` as well as `/api`, with `changeOrigin: false`.
-- `useLoginState()`, the logout mutation, the menu ("Logga in" / "Ladda upp kvitto" + "Logga ut"), the upload
-  page asking a logged-out visitor to log in, and `/#/denied`.
-
-Verify, with `local-secrets.properties` filled in, the backend in `local` and `npm run dev`:
-1. `http://localhost:5173/`: the menu shows "Logga in". It leads to Google, which shows
-   `redirect_uri=http://localhost:5173/login/oauth2/code/google` in its URL; after login the browser is on
-   `localhost:5173/#/upload` and the card says "Kommer i fas 4".
-2. The menu now shows "Ladda upp kvitto" and "Logga ut". "Logga ut" lands on `/#/` and the menu shows "Logga in";
-   `/#/upload` then asks to log in.
-3. The public page's viewer count still works while logged in and out.
-
-**3.4 Release `v0.3.0` and the production test** — owner, with Claude preparing
-- `./change-version.sh 0.3.0`, push commit and tag, Ctrl-C and `just doit` on the Mini. `pbs.env` already holds
-  the Google values and `PBS_ALLOWED_EMAIL`.
-
-Verify:
-1. `/ping` answers `ok`; `https://pbs.tarnvik.com/` loads for a browser that is not logged in, with no detour via
-   Google.
-2. `curl -si https://pbs.tarnvik.com/api/protected/ping` → 401; `/v3/api-docs` → 404.
-3. **On the phone:** "Logga in" → Google → `/#/upload`. The session cookie (DevTools on the dev machine, if not on
-   the phone) is `HttpOnly`, `Secure`, `SameSite=Lax`. "Logga ut" → logged out.
-4. **A second Google account is refused:** it lands on `/#/denied`, and the menu still shows "Logga in".
-5. A restart of pbs logs the owner out (sessions are in memory), as designed.
-
-**3.4 outcome, 2026-10-25.** `v0.3.0` deployed. Checks 1–3 passed: the public page loads with no detour via
-Google; the anonymous `curl` got `HTTP/2 401` with a JSON body through Cloudflare and Caddy, its cookie
-`Secure; HttpOnly; SameSite=Lax`, and `/v3/api-docs` got 404; login and logout work on the phone. Check 4
-passed on 2026-10-28: a second Google account was refused.
-
-**3.5 No session for an anonymous request** — Claude ✅ built (2026-10-28), owner releases
-- *Found in check 2:* the anonymous 401 came with a `set-cookie: JSESSIONID=…`. Before answering 401, Spring
-  Security's request cache saves the refused request in a new session, to send the user back to it after login.
-  pbs never uses it — a login always lands on `/#/upload` (`defaultSuccessUrl(…, true)`) — yet every visitor's
-  page calls `/api/auth/me`, so each friend, and any bot, holds a 30-minute session in memory for nothing.
-- Fix: `.requestCache(cache -> cache.requestCache(new NullRequestCache()))` in `SecurityConfig`, and a test in
-  `SecurityConfigTest` that an anonymous 401 creates no session. Released as `v0.3.1`.
-
-  The test asserts that no session exists, not that no cookie is set: MockMvc never writes `JSESSIONID`, so a
-  cookie assertion would pass without the fix. The jar, checked with curl, sets none on a 401; starting a login
-  still sets one, as it must, since the OAuth2 `state` lives in that session.
-
-Verify:
-1. `mvn verify` → `BUILD SUCCESS`, `Tests run: 21, Failures: 0`. ✅
-2. After the deploy, `curl -si https://pbs.tarnvik.com/api/protected/ping` → 401 with no `set-cookie` line.
-3. Login and logout on the phone still work.
+**Phase 3 - Login on the upload page** ✅ (2026-10-28). The security frame, with nothing behind it yet worth
+protecting: Google login admitting only the owner (`OwnerOnlyOidcUserService`), the static-file and `/error`
+permits, 401 for `/api/**`, `SameSite=Lax`, `/api/auth/me`, logout answering 200, a placeholder
+`/api/protected/ping`, the menu following the login state, and `/#/denied`; springdoc in `local` only and the
+generated RTK Query client, with `getMe` its first endpoint. Released as `v0.3.0`, then `v0.3.1` without the
+session per anonymous 401. Proven in production: the public page loads with no detour via Google, an anonymous
+`curl` gets 401 through Cloudflare and Caddy with no cookie, `/v3/api-docs` gets 404, the owner logs in and out on
+a phone, and a second Google account is refused. What it established is now in Authentication, Development and
+Frontend data layer; the worked step plan is in git history.
 
 ### Functionality
 
 **Phase 4 - Parse a receipt.** Canvas resize in the browser, the multipart endpoint, the Claude call with the typed
-schema, the sum check. Needs pbs's own Anthropic key. The upload page shows the parsed rows and any warning. No
-splitting yet.
+schema, the sum check, recording and the canned parser, reset, and the `receipt` event. Needs pbs's own Anthropic
+key. The upload page shows the parsed rows and any warning; the public page only which receipt it is. No
+checkboxes and no splitting yet — those are phase 6, by decision (2026-10-28), so that each phase reaches a real
+dinner on its own.
 
-**Phase 5 - Split and broadcast.** Checkboxes, the assignment endpoint, the split calculation, the state record replacing
-the dummy counter on the SSE stream, the public page showing per-person items and totals. The real dinner test.
+#### Phase 4 — step by step
 
-**Phase 6 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
+Planned 2026-10-28 from the owner's requirements; the decisions are in Purpose, Receipt parsing, State, Live
+updates, The two pages and API.
 
-**Phase 7 - Phone polish.** Layout at 375 px, tap targets, empty states.
+**4.1 Parse, record, reset and the `receipt` event — backend** — Claude
+- `com.anthropic:anthropic-java`. `ParsedReceipt` with its `@JsonPropertyDescription`s and the prompt, Swedish
+  receipt conventions included ("Att betala", "öresavrundning", quantity lines).
+- `ReceiptParser`, implemented by `ClaudeReceiptParser` — the provider, in `port.outgoing.rest.claude`, adapted
+  from publicbackend's `ClaudeProvider` — and `CannedReceiptParser`, chosen by `pbs.receipt-parser`. The recording
+  of real parses; `pbs.recording-dir`; both recording folders gitignored.
+- `ReceiptService`: the state; upload parses, numbers the items, runs the sum check, swaps the state in and
+  broadcasts; reset empties it and broadcasts. Parse failures (API error, timeout, refusal) become one exception
+  answered 502 with a Swedish message.
+- `POST /api/protected/receipt` (multipart, part `image`) answering the `Receipt`; `DELETE` answering 204.
+  Multipart limits 10 MB. The `receipt` event, sent on connect always and on upload and reset; the viewer count
+  stays beside it until phase 5.
+- `/api/protected/ping` is removed; `SecurityConfigTest` guards the receipt endpoints instead.
+- Tests: an anonymous `POST` to the receipt endpoint gets 401 (the paid endpoint — see Authentication); item
+  numbering; the sum check, with and without adjustments; upload and reset broadcast; `{"receipt": null}` on
+  connect without a receipt; the canned parser's round. No test calls the real API.
+
+Verify, on the dev machine:
+1. `mvn verify` → `BUILD SUCCESS`, all tests passing, the new ones included.
+2. Backend in `local` with `canned` and a hand-written recording in `recordings/`:
+   `curl -sN localhost:8082/api/public/events` shows `event: receipt` with `{"receipt":null}` at once.
+3. Logged in through Vite (`localhost:5173`), the session cookie copied from DevTools:
+   `curl -s -b JSESSIONID=… -F image=@<any>.jpg localhost:5173/api/protected/receipt` answers the canned receipt,
+   items numbered 1, 2, 3 …, and the stream from check 2 shows it as a `receipt` event.
+4. `curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -b JSESSIONID=… localhost:5173/api/protected/receipt` →
+   `204`, and the stream shows `{"receipt":null}`.
+5. Without the cookie, both → 401.
+
+**4.2 pbs's own Anthropic key** — owner, Claude walking through
+- In the Anthropic Console: a workspace `pbs` with a monthly spending limit, and a key in it (see Environment
+  variables). Into `local-secrets.properties` and into `deployment/pbs.env` on the Mini.
+
+Verify:
+1. The Console shows the workspace, its limit and the key.
+2. `grep -c '^ANTHROPIC_API_KEY=.' local-secrets.properties deployment/pbs.env` → `1` for each (on its machine).
+
+**4.3 Upload and the receipt list — frontend** — Claude
+- The upload button, the canvas downscaling to JPEG, the upload and reset mutations (regenerated with
+  `npm run generate-api`), "Läser kvittot…" and the error messages.
+- `Receipt` in `types/live.ts`; the stream's cache entry gains a `receipt` part, written by the `receipt` listener.
+- The upload page drawn from it: the rows as in The two pages (without the checkbox line), adjustments, the
+  footer with "Totalt", the sum warning, "Återställ" and its `<dialog>`.
+- The public page: the restaurant and the total, or "Inget kvitto ännu". The viewer count stays until phase 5.
+
+Verify, with the backend in `local` (`canned`, two or more hand-written recordings, one not adding up) and
+`npm run dev`, logged in, the browser in a 375 px device view:
+1. The upload page shows the green button. Choosing any image shows "Läser kvittot…" for about a second, then the
+   rows in the recording's order, striped, prices right-aligned digit under digit, a long name wrapping.
+2. The recording that does not add up shows the warning; the one that does shows none.
+3. A reload keeps the receipt. A second tab on `/#/` shows the restaurant and total, and changes with each upload.
+4. "Återställ" asks first; "Avbryt" changes nothing; confirming brings the button back on the upload page and
+   "Inget kvitto ännu" on the public tab.
+5. The upload request in DevTools' Network tab is `image/jpeg` and well under 2 MB, whatever the image chosen.
+
+**4.4 First real receipts** — owner, Claude tuning the prompt
+- `pbs.receipt-parser=claude` in `local`. Two or three real receipts, photographed with the phone and uploaded
+  from the dev machine's browser. Claude compares each recording with the paper and adjusts the prompt and field
+  descriptions; then `local` goes back to `canned`, on these recordings.
+
+Verify:
+1. Each parse left a JPEG of at most 2576 px on the long edge (`sips -g pixelWidth -g pixelHeight <file>`) and a
+   JSON naming `claude-opus-5-5` and `medium`, with token counts and the time taken.
+2. Every price, quantity and the total match the paper; a quantity line is one row; the sum warning shows only
+   where the receipt itself does not add up.
+3. Time and cost per receipt (tokens × price) are noted here, replacing the estimate in The Claude call.
+4. Back on `canned`, an upload adds nothing to the Console's usage.
+
+**4.5 Release `v0.4.0` and the production test** — owner, with Claude preparing
+- `./change-version.sh 0.4.0`, push the commit **and** the tag (`git push && git push origin v0.4.0` — 3.5
+  showed a forgotten tag push redeploys the old version), Ctrl-C and `just doit` on the Mini.
+
+Verify:
+1. The startup log says `Starting PbsApplication v0.4.0`.
+2. **On the phone:** the button offers "Ta bild" and "Fotobibliotek". A photo of a real receipt taken with it is
+   parsed and shown, and a second phone or browser on `/#/` shows the restaurant and total at once.
+3. "Återställ" clears both.
+4. `deployment/recordings/` on the Mini holds the parse.
+5. `curl -si -X POST https://pbs.tarnvik.com/api/protected/receipt` → 401.
+
+**Phase 5 - The receipt on every phone.** Phase 4 already sends the `receipt` event to every connected reader,
+and to a reader arriving later as its first event on connect, so no separate fetch is needed: a phone that comes
+online after the parse gets the receipt the moment it connects. This phase gives the public page its real content:
+- The restaurant as a heading, the items in receipt order, and a last row "Kvar att dela på" — the receipt total,
+  until phase 6 starts taking items off.
+- **The rows of a new receipt appear one by one, subtly** — a short fade with a slight rise, each row a few tens of
+  milliseconds after the one above. Keyed on a new `receiptId`, so a reconnect or an unlocked phone does not
+  replay it (see Live updates); skipped under `prefers-reduced-motion`.
+- Phase 2's dummies leave the page: the viewer count, and the connection status line — perhaps replaced by a quiet
+  notice shown only while reconnecting, decided when planned.
+
+**Phase 6 - Split and broadcast.** The owner assigns items; every reader follows.
+- **The owner's page:** the checkbox line on every row, one box per person, labelled with the first name; the
+  names from `GET /api/public/participants`, fetched on page load (configured in `application.properties`); ticked
+  rows greyed; "Kvar att dela på" in the footer.
+- **Every tick is sent at once and every change broadcast whole** — the owner's idea and the existing design
+  agree. The request sets the row's full set of people (`PUT …/items/{id}/assignees`, see The assignment
+  request); the server answers with the `split` event: every item id with its people, each person's total and
+  what is left. People are identified by first name, unique among four.
+- **No deduplication.** A repeated request sets the same set again and changes nothing, and a broadcast is a few
+  hundred bytes. Requests arriving out of order over a poor connection *can* leave a row other than last tapped;
+  what makes that harmless is that the owner's checkboxes show the state from the `split` event, so the screen
+  always shows what the server holds, and a wrong box is seen and tapped again — at a table where it can be
+  discussed anyway.
+- **The public page:** an assigned item leaves the list of items; each person's total and "Kvar att dela på"
+  update continuously. Whether assigned items reappear under each person: see The two pages.
+- The split calculation as in The split. The real dinner test.
+
+**Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
+broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
+link opening the Swish app:
+`https://app.swish.nu/1/p/sw/?sw=<number>&amt=<amount>&msg=<message>` (as the owner found it documented; verify on a
+phone when planned).
+- **Amount:** the person's rounded total. **Message:** the restaurant and the date, cut to Swish's 50 characters,
+  URL-encoded (åäö, spaces).
+- **`edit=amt`**, so that a friend can change the amount in the app. Swish locks a prefilled amount otherwise, and
+  the design lets the friends round up as they see fit.
+- **"Klar" can be undone**, hiding the buttons again, for a mistake spotted at the table. Reset clears everything.
+- **The owner's phone number — recommended: include it**, but from the environment (`PBS_SWISH_NUMBER` in
+  `pbs.env`), never from a tracked file: the repository is public, and a phone number identifies the owner far
+  beyond a first name. The backend sends it only in the done state and drops it on reset or undo. *Why include it:*
+  without a recipient each friend has to find the owner in Swish themselves, and paying the wrong person is the
+  likelier mishap. The exposure is small — the page is public but its address is not advertised, the number is
+  shown for minutes, and the friends already have it. Not logged. *Fallback if the owner decides against it:* a
+  link without `sw`, if Swish then asks for the recipient — to be tried on a phone.
+- The Swish logo from Swish's marketing toolbox (`https://www.swish.nu/marketing-toolbox/logotype#primary`),
+  used as its guidelines say.
+
+**Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
+
+**Phase 9 - Phone polish.** Layout at 375 px, tap targets, empty states.
 
 ### Operations
 
-**Phase 8 - Terminal dashboard.** A status board on the terminal pbs runs in on the Mini, under `production`, like
+**Phase 10 - Terminal dashboard.** A status board on the terminal pbs runs in on the Mini, under `production`, like
 publicbackend's and overlord's — so the three foreground tabs on the Mini look and work alike. Copy publicbackend's
 mechanics (jline in `port.outgoing.terminal`, one render thread owning the screen, repaints driven by Spring
 events plus one hourly clock, the console appender detached by name once the alternate screen is up, startup
