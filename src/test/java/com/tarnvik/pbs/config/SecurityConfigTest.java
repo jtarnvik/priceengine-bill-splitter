@@ -39,6 +39,18 @@ class SecurityConfigTest {
       .andExpect(header().doesNotExist("Location"));
   }
 
+  /**
+   * Every visitor's page calls /api/auth/me, so a session per 401 would hold one in memory for each friend and bot.
+   * Asserted on the session rather than a Set-Cookie header: MockMvc does not write the JSESSIONID cookie.
+   */
+  @Test
+  void protectedEndpoint_anonymous_createsNoSession() throws Exception {
+    MvcResult result = mockMvc.perform(get("/api/auth/me"))
+      .andExpect(status().isUnauthorized())
+      .andReturn();
+    assertThat(result.getRequest().getSession(false)).isNull();
+  }
+
   @Test
   void protectedEndpoint_anonymousPost_gets401() throws Exception {
     mockMvc.perform(post("/api/protected/ping"))

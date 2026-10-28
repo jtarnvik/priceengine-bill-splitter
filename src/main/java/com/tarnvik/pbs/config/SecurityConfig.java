@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.savedrequest.NullRequestCache;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 /**
@@ -63,6 +64,10 @@ public class SecurityConfig {
           PathPatternRequestMatcher.withDefaults().matcher("/api/**")
         )
       )
+      // By default a refused request is saved in a new session, to return to it after login. A login here always
+      // lands on /#/upload, so the saved request is never used, and every visitor's call to /api/auth/me would
+      // leave a 30-minute session in memory for nothing.
+      .requestCache(cache -> cache.requestCache(new NullRequestCache()))
       // Defensible only because the session cookie is first-party and SameSite=Lax (see application.properties):
       // a cross-site POST does not carry it.
       .csrf(AbstractHttpConfigurer::disable);

@@ -50,13 +50,13 @@ but last (phase 8).
 
 ## Status
 
-**Phases 1 and 2 done (2026-10-25); phase 3's steps 3.1–3.3 verified on the dev machine, 3.4 (release
-`v0.3.0` and the production test) under way.** pbs `v0.2.0` runs on the Mini at `https://pbs.tarnvik.com`,
-behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the log-retention stack. It serves the
-React shell from the jar — header, menu, the two placeholder pages — and the live stream with its dummy viewer
-count, proven over Cloudflare and on a phone. The design below was worked out in one discussion (October 2026) before the repository existed.
-Treat it as decided unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text
-from this file as it is carried out, keeping the "why" notes.
+**Phases 1 and 2 done (2026-10-25); phase 3 done but for 3.5, a small security-config fix, which is built and
+waits for its release as `v0.3.1`.** pbs `v0.3.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare
+and Caddy, monitored by UptimeRobot, its log collected by the log-retention stack. It serves the React shell from
+the jar — header, menu, the two placeholder pages — and the live stream with its dummy viewer count, proven over
+Cloudflare and on a phone, and the owner logs in and out with Google. The design below was worked out in one
+discussion (October 2026) before the repository existed. Treat it as decided unless a step proves it wrong, and
+"Phases, in order" as the plan. Remove planning text from this file as it is carried out, keeping the "why" notes.
 
 **Base structure before functionality.** The first three phases build and prove the frame — infrastructure,
 a two-page shell, login — and contain no receipt, split or Claude code at all. Nothing functional starts until
@@ -649,6 +649,28 @@ Verify:
    the phone) is `HttpOnly`, `Secure`, `SameSite=Lax`. "Logga ut" → logged out.
 4. **A second Google account is refused:** it lands on `/#/denied`, and the menu still shows "Logga in".
 5. A restart of pbs logs the owner out (sessions are in memory), as designed.
+
+**3.4 outcome, 2026-10-25.** `v0.3.0` deployed. Checks 1–3 passed: the public page loads with no detour via
+Google; the anonymous `curl` got `HTTP/2 401` with a JSON body through Cloudflare and Caddy, its cookie
+`Secure; HttpOnly; SameSite=Lax`, and `/v3/api-docs` got 404; login and logout work on the phone. Check 4
+passed on 2026-10-28: a second Google account was refused.
+
+**3.5 No session for an anonymous request** — Claude ✅ built (2026-10-28), owner releases
+- *Found in check 2:* the anonymous 401 came with a `set-cookie: JSESSIONID=…`. Before answering 401, Spring
+  Security's request cache saves the refused request in a new session, to send the user back to it after login.
+  pbs never uses it — a login always lands on `/#/upload` (`defaultSuccessUrl(…, true)`) — yet every visitor's
+  page calls `/api/auth/me`, so each friend, and any bot, holds a 30-minute session in memory for nothing.
+- Fix: `.requestCache(cache -> cache.requestCache(new NullRequestCache()))` in `SecurityConfig`, and a test in
+  `SecurityConfigTest` that an anonymous 401 creates no session. Released as `v0.3.1`.
+
+  The test asserts that no session exists, not that no cookie is set: MockMvc never writes `JSESSIONID`, so a
+  cookie assertion would pass without the fix. The jar, checked with curl, sets none on a 401; starting a login
+  still sets one, as it must, since the OAuth2 `state` lives in that session.
+
+Verify:
+1. `mvn verify` → `BUILD SUCCESS`, `Tests run: 21, Failures: 0`. ✅
+2. After the deploy, `curl -si https://pbs.tarnvik.com/api/protected/ping` → 401 with no `set-cookie` line.
+3. Login and logout on the phone still work.
 
 ### Functionality
 
