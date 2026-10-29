@@ -50,13 +50,19 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1, 2 and 3 done (2026-10-25 to 2026-10-28); phase 4 planned (2026-10-28), not started.** pbs `v0.3.1`
-runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log
-collected by the log-retention stack. It serves the React shell from the jar — header, menu, the two placeholder
-pages — and the live stream with its dummy viewer count, proven over Cloudflare and on a phone, and the owner logs
-in and out with Google. The design below was worked out in one discussion (October 2026) before the repository
-existed. Treat it as decided unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning
-text from this file as it is carried out, keeping the "why" notes.
+**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 not planned yet.** pbs `v0.4.1` runs on the Mini at
+`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
+log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
+they do not add up to the total; every open page gets the receipt live, the public page so far only its restaurant
+and total, beside phase 2's dummy viewer count.
+
+**Production runs the canned parser for now** (`pbs.receipt-parser=canned` in `application-production.properties`,
+from `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost while the
+owner tries the GUI. Remove that line to parse with Claude again.
+
+The design below was worked out in one discussion (October 2026) before the repository existed. Treat it as decided
+unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text from this file as it is
+carried out, keeping the "why" notes.
 
 **Base structure before functionality.** The first three phases build and prove the frame — infrastructure,
 a two-page shell, login — and contain no receipt, split or Claude code at all. Nothing functional starts until
@@ -295,6 +301,9 @@ its files. Read publicbackend's `CLAUDE.md` "Deployment" for the reasoning, espe
   the running pbs and `just doit` on the Mini. That leaves the clone on the tag in detached HEAD, as expected.
   The deploy worked when the startup log says `Starting PbsApplication v<version>` and `deployment/bin/` holds
   `Version-<version>.txt`.
+- **The history was rewritten on 2026-10-29** to remove a receipt photo, so every commit and tag up to `v0.3.1` has a
+  new hash. A clone from before then refuses the changed tags, and `just pull` stops at `git fetch --tags`: run
+  `git fetch --tags --force` once in it (done on the Mini), or clone again.
 - **The antrun copy is `failonerror="true"`.** publicbackend's `false` is a Render leftover; a failed copy must
   stop `change-version.sh`, not leave a tag without its `build.just`.
 - **The production clone sits next to publicbackend's, in a folder with the repository's name.** The manual's
@@ -351,10 +360,11 @@ iOS limits canvas area, and a 48 MP photo exceeds it.
 
 - Anthropic Java SDK (`com.anthropic:anthropic-java`), **model `claude-opus-5-5`, effort `medium`** (decided
   2026-10-28). *Why the most capable model:* a misread price is the error that matters, and at one receipt per
-  dinner the cost does not. **Measured (2026-10-29)** on the first real receipt, 14 lines, a 562 × 1280 photo:
-  7 s, 2,581 tokens in and 611 out (thinking included), about 2.3 US cents, every line right. A photo at the full
-  2576 px adds at most ~3,800 image tokens, some 1.5 cents. Sonnet 5.5 costs half and Haiku 5.5 a fraction. The
-  recordings make a measured comparison cheap later: the same images through another model or effort, for öre.
+  dinner the cost does not. **Measured (2026-10-29)** on a real 14-line receipt, photographed with the phone and
+  downscaled to 1129 × 2576: 7 s, 5,395 tokens in and 611 out (thinking included), about 3.4 US cents, every line
+  right. The same receipt at 562 × 1280 gave the identical answer for 2.3 cents. Sonnet 5.5 costs half and Haiku
+  5.5 a fraction. The recordings make a measured comparison cheap later: the same images through another model or
+  effort, for öre.
 - **Structured output, typed.** `MessageCreateParams.builder()...outputConfig(ParsedReceipt.class)` gives a
   `StructuredMessageCreateParams<ParsedReceipt>` and the response comes back as that class. Jackson's
   `@JsonPropertyDescription` on the fields becomes part of the schema, so the instructions about each field live
@@ -424,11 +434,15 @@ digits, and no tip to complicate the total.
   machine to develop against them.
 - **`pbs.receipt-parser=claude|canned`**, `claude` by default. The canned parser answers with the recordings in
   name order, a different one per upload, so that reset and a new upload show a new receipt, after a second's
-  pause, so that the waiting state can be seen. `local` uses `canned` once there are recordings.
+  pause, so that the waiting state can be seen. It reads only the `*.json` directly in the folder, not in
+  subfolders. `local` uses `canned`; switched to `claude` it makes new recordings with the development key.
 - The canned parser reads the same `ParsedReceipt` JSON that Claude answered, so numbering, the sum check and the
   event run on it exactly as on a real parse.
 - **Real recordings are not committed.** The repository is public, and a folder of receipts says where the owner
-  eats. Tests use small hand-written receipts.
+  eats. Photos of receipts kept for trying the parser go in `receipts/`, gitignored for the same reason. Tests use
+  small hand-written receipts in `src/test/resources/recordings/`, which also start `recordings/` in development
+  (the command is in `application-local.properties`). *Why this is strict:* a receipt photo committed with the
+  first commit was removed from the whole history on 2026-10-29 (see Deployment).
 - *Later, perhaps:* run the stored images through another model or effort and compare the answers.
 
 ## The split
@@ -546,8 +560,14 @@ stack, so its files are the reference (see Reference implementations).
 - **springdoc only in the `local` profile.** The app is on the public internet, and `/v3/api-docs` plus Swagger
   UI would publish the whole API surface. Off by default, on in `local`, which is the only place codegen runs.
 - **The stream's payload type is invisible to springdoc** (an `SseEmitter` has no typed body), so it is
-  hand-written in `types/live.ts`, beside its Java record. The stream's controller is tagged `events`, and
+  hand-written in `types/live.ts`, beside its Java record. The receipt inside the `receipt` event is the generated
+  `Receipt`, since the upload answers with the same one. The stream's controller is tagged `events`, and
   `openapi-config.cjs` excludes that tag.
+- **A multipart upload goes through the generated client.** The generator types its body as `{ image: Blob }`,
+  which axios would send as JSON; `axiosBaseQuery` turns a body holding a `Blob` into `FormData`.
+- **The receipt mutations write their result into the stream's cache** (`receipt-api.ts`, enhancing the generated
+  ones), so the upload page never shows the button for an instant between the answer and the `receipt` event.
+  Components import those hooks from there, which is what loads the enhancement.
 - **Logout is hand-written** in `auth-api.ts`: `/logout` is Spring Security's filter, so springdoc never sees it.
   It is injected into the *generated* api, so the `auth` tag it invalidates is a known tag type.
 - **The login state is `useLoginState()`** (`hook/use-login-state.ts`): `loading`, `loggedOut` (401),
@@ -677,96 +697,16 @@ Frontend data layer; the worked step plan is in git history.
 
 ### Functionality
 
-**Phase 4 - Parse a receipt.** Canvas resize in the browser, the multipart endpoint, the Claude call with the typed
-schema, the sum check, recording and the canned parser, reset, and the `receipt` event. Needs pbs's own Anthropic
-key. The upload page shows the parsed rows and any warning; the public page only which receipt it is. No
-checkboxes and no splitting yet — those are phase 6, by decision (2026-10-28), so that each phase reaches a real
-dinner on its own.
-
-#### Phase 4 — step by step
-
-Planned 2026-10-28 from the owner's requirements; the decisions are in Purpose, Receipt parsing, State, Live
-updates, The two pages and API.
-
-**4.1 Parse, record, reset and the `receipt` event — backend** — Claude ✅
-- `com.anthropic:anthropic-java`. `ParsedReceipt` with its `@JsonPropertyDescription`s and the prompt, Swedish
-  receipt conventions included ("Att betala", "öresavrundning", quantity lines).
-- `ReceiptParser`, implemented by `ClaudeReceiptParser` — the provider, in `port.outgoing.rest.claude`, adapted
-  from publicbackend's `ClaudeProvider` — and `CannedReceiptParser`, chosen by `pbs.receipt-parser`. The recording
-  of real parses; `pbs.recording-dir`; both recording folders gitignored.
-- `ReceiptService`: the state; upload parses, numbers the items, runs the sum check, swaps the state in and
-  broadcasts; reset empties it and broadcasts. Parse failures (API error, timeout, refusal) become one exception
-  answered 502 with a Swedish message.
-- `POST /api/protected/receipt` (multipart, part `image`) answering the `Receipt`; `DELETE` answering 204.
-  Multipart limits 10 MB. The `receipt` event, sent on connect always and on upload and reset; the viewer count
-  stays beside it until phase 5.
-- `/api/protected/ping` is removed; `SecurityConfigTest` guards the receipt endpoints instead.
-- Tests: an anonymous `POST` to the receipt endpoint gets 401 (the paid endpoint — see Authentication); item
-  numbering; the sum check, with and without adjustments; upload and reset broadcast; `{"receipt": null}` on
-  connect without a receipt; the canned parser's round. No test calls the real API.
-
-Verify, on the dev machine:
-1. `mvn verify` → `BUILD SUCCESS`, all tests passing, the new ones included.
-2. Backend in `local` with `canned` and a hand-written recording in `recordings/`:
-   `curl -sN localhost:8082/api/public/events` shows `event: receipt` with `{"receipt":null}` at once.
-3. Logged in through Vite (`localhost:5173`), the session cookie copied from DevTools:
-   `curl -s -b JSESSIONID=… -F image=@<any>.jpg localhost:5173/api/protected/receipt` answers the canned receipt,
-   items numbered 1, 2, 3 …, and the stream from check 2 shows it as a `receipt` event.
-4. `curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -b JSESSIONID=… localhost:5173/api/protected/receipt` →
-   `204`, and the stream shows `{"receipt":null}`.
-5. Without the cookie, both → 401.
-
-**4.2 pbs's own Anthropic key** — owner, Claude walking through ✅
-- In the Anthropic Console: a workspace `pbs` with a monthly spending limit, and a key in it (see Environment
-  variables). Into `local-secrets.properties` and into `deployment/pbs.env` on the Mini.
-
-Verify:
-1. The Console shows the workspace, its limit and the key.
-2. `grep -c '^ANTHROPIC_API_KEY=.' local-secrets.properties` on the dev machine and
-   `grep -c '^export ANTHROPIC_API_KEY=.' deployment/pbs.env` on the Mini (its lines start with `export`) → `1` each.
-
-**4.3 Upload and the receipt list — frontend** — Claude ✅
-- The upload button, the canvas downscaling to JPEG, the upload and reset mutations (regenerated with
-  `npm run generate-api`), "Läser kvittot…" and the error messages.
-- `Receipt` in `types/live.ts`; the stream's cache entry gains a `receipt` part, written by the `receipt` listener.
-- The upload page drawn from it: the rows as in The two pages (without the checkbox line), adjustments, the
-  footer with "Totalt", the sum warning, "Återställ" and its `<dialog>`.
-- The public page: the restaurant and the total, or "Inget kvitto ännu". The viewer count stays until phase 5.
-
-Verify, with the backend in `local` (`canned`, two or more hand-written recordings, one not adding up) and
-`npm run dev`, logged in, the browser in a 375 px device view:
-1. The upload page shows the green button. Choosing any image shows "Läser kvittot…" for about a second, then the
-   rows in the recording's order, striped, prices right-aligned digit under digit, a long name wrapping.
-2. The recording that does not add up shows the warning; the one that does shows none.
-3. A reload keeps the receipt. A second tab on `/#/` shows the restaurant and total, and changes with each upload.
-4. "Återställ" asks first; "Avbryt" changes nothing; confirming brings the button back on the upload page and
-   "Inget kvitto ännu" on the public tab.
-5. The upload request in DevTools' Network tab is `image/jpeg` and well under 2 MB, whatever the image chosen.
-
-**4.4 First real receipts** — owner, Claude tuning the prompt ✅
-- `pbs.receipt-parser=claude` in `local`. Two or three real receipts, photographed with the phone and uploaded
-  from the dev machine's browser. Claude compares each recording with the paper and adjusts the prompt and field
-  descriptions; then `local` goes back to `canned`, on these recordings.
-
-Verify:
-1. Each parse left a JPEG of at most 2576 px on the long edge (`sips -g pixelWidth -g pixelHeight <file>`) and a
-   JSON naming `claude-opus-5-5` and `medium`, with token counts and the time taken.
-2. Every price, quantity and the total match the paper; a quantity line is one row; the sum warning shows only
-   where the receipt itself does not add up.
-3. Time and cost per receipt (tokens × price) are noted here, replacing the estimate in The Claude call.
-4. Back on `canned`, an upload adds nothing to the Console's usage.
-
-**4.5 Release `v0.4.0` and the production test** — owner, with Claude preparing
-- `./change-version.sh 0.4.0`, push the commit **and** the tag (`git push && git push origin v0.4.0` — 3.5
-  showed a forgotten tag push redeploys the old version), Ctrl-C and `just doit` on the Mini.
-
-Verify:
-1. The startup log says `Starting PbsApplication v0.4.0`.
-2. **On the phone:** the button offers "Ta bild" and "Fotobibliotek". A photo of a real receipt taken with it is
-   parsed and shown, and a second phone or browser on `/#/` shows the restaurant and total at once.
-3. "Återställ" clears both.
-4. `deployment/recordings/` on the Mini holds the parse.
-5. `curl -si -X POST https://pbs.tarnvik.com/api/protected/receipt` → 401.
+**Phase 4 - Parse a receipt** ✅ (2026-10-29). The canvas downscaling in the browser, the multipart upload, the
+Claude call with its typed schema, the sum check, recording and the canned parser, reset, and the `receipt` event;
+the upload page shows the rows and any warning, the public page only which receipt it is. No checkboxes and no
+splitting — those are phase 6, by decision (2026-10-28), so that each phase reaches a real dinner on its own.
+pbs got its own Anthropic key, one for development and one for the Mini, in a Console workspace with a spending
+limit. Released as `v0.4.0` and proven in production: a phone photo taken through the button, downscaled to
+1129 × 2576, parsed with every line right and shown at once on a second browser; reset clears both; the parse is
+recorded on the Mini; an anonymous upload gets 401 through Cloudflare and Caddy. Then `v0.4.1`, with production on
+the canned parser (see Status). What it established is now in Receipt parsing, Frontend data layer and
+Deployment; the worked step plan is in git history.
 
 **Phase 5 - The receipt on every phone.** Phase 4 already sends the `receipt` event to every connected reader,
 and to a reader arriving later as its first event on connect, so no separate fetch is needed: a phone that comes
