@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 
 import { Card } from '../components/common/card';
 import { ConfirmDialog } from '../components/common/confirm-dialog';
@@ -8,7 +9,7 @@ import { UploadButton } from '../components/upload-button';
 import { useGetLiveStateQuery } from '../communication/api/live-api';
 import { useResetReceiptMutation, useUploadReceiptMutation } from '../communication/api/receipt-api';
 import { AxiosQueryError } from '../communication/axios-base-query';
-import { LOGIN_URL, useLoginState } from '../hook/use-login-state';
+import { useLoginState } from '../hook/use-login-state';
 import { downscaleToJpeg } from '../util/downscale-image';
 
 // The owner's page, behind login.
@@ -18,17 +19,17 @@ export function UploadPage() {
   if (loginState === 'loggedIn') {
     return <OwnerReceipt />;
   }
+  if (loginState === 'loggedOut') {
+    // Not logged in, or no longer: a restart of the server ends every session. The public page has the receipt,
+    // and "Logga in" in the menu.
+    return <Navigate to="/" replace />;
+  }
   return (
     <View>
       <Card>
         <h2 className="pt-2 font-medium">Ladda upp kvitto</h2>
         {loginState === 'loading' && <p className="pb-2">Kontrollerar inloggning …</p>}
         {loginState === 'offline' && <p className="pb-2">Servern svarar inte just nu.</p>}
-        {loginState === 'loggedOut' && (
-          <p className="pb-2">
-            Sidan är bara för den som delar notan. <a className="text-brand underline" href={LOGIN_URL}>Logga in</a>
-          </p>
-        )}
       </Card>
     </View>
   );

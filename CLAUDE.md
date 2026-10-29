@@ -50,7 +50,7 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29).** pbs `v0.4.3` runs on
+**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29).** pbs `v0.4.4` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; every open page gets the receipt live. `v0.4.2` carries step 5.1, released to be
@@ -185,10 +185,18 @@ Google OAuth2 via Spring Security, admitting exactly one Google account: the own
   session is ever created for anyone else. publicbackend checks in the success handler and invalidates the session
   afterwards because it has to record pending users; with a single fixed user there is nothing to record.
 - **The allowed email comes from the environment**, never from a tracked file. The repo is public.
-- **There is no login page.** The header menu's "Logga in" item links to `/oauth2/authorization/google` when
-  `/api/auth/me` answers 401. With a single provider, Spring redirects straight to Google. A login redirects to
-  `/#/upload` (`defaultSuccessUrl(…, true)`), a refused one to `/#/denied` (`failureUrl`), which says only the
-  owner can log in — otherwise Spring would show its own generated, English `/login` page.
+- **No login form, only a waiting page.** The header menu's "Logga in" item, shown when `/api/auth/me` answers
+  401, closes the menu and opens `/#/login`, which shows "Loggar in …" with a spinner and replaces itself with
+  `/oauth2/authorization/google`. With a single provider, Spring redirects straight to Google. *Why the waiting
+  page* (2026-10-29): with a plain link the menu stayed open and nothing seemed to happen while a phone reached
+  Google. A login redirects to `/#/upload` (`defaultSuccessUrl(…, true)`), a refused one to `/#/denied`
+  (`failureUrl`), which says only the owner can log in — otherwise Spring would show its own generated, English
+  `/login` page.
+- **A lost session sends the upload page to the public page.** Sessions live in memory, so every restart ends
+  one, and a phone left on `/#/upload` would go on believing it is logged in. `/api/auth/me` is asked again
+  whenever the page comes back into view or the network returns (`refetchOnFocus`, `refetchOnReconnect`, with
+  `setupListeners` in `store.ts`), and a 401 on an upload or reset makes it ask at once. On a 401 the upload page
+  redirects to `/#/`.
 - **`/api/auth/me` answers the owner's email, or 401.** It is not permitted for anonymous requests, as the API
   table's "Optional" first suggested: the 401 rule then answers for it, and the controller never sees a missing
   principal.

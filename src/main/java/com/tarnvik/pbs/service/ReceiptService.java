@@ -39,6 +39,8 @@ public class ReceiptService {
    * failed parse leaves the current receipt as it was.
    */
   public Receipt upload(byte[] jpeg) {
+    // Which parser answers, since `canned` and `claude` look alike from the page: only one costs money.
+    log.info("Parsing an upload of {} bytes with {}", jpeg.length, receiptParser.getClass().getSimpleName());
     ParsedReceipt parsed = receiptParser.parse(jpeg);
     if (parsed.items() == null || parsed.items().isEmpty()) {
       // Most likely a photo of something other than a receipt; the prompt asks for no items then.

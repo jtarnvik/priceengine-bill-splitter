@@ -1,5 +1,17 @@
 import { generatedApi } from './generated-api';
 import { liveApi } from './live-api';
+import { AxiosQueryError } from '../axios-base-query';
+
+/**
+ * A 401 means the session is gone, most likely ended by a restart of the server. Refetching `/api/auth/me` makes
+ * every component see that at once, and the upload page sends the owner to the public page.
+ */
+function onUnauthorised(failure: unknown, dispatch: (action: unknown) => unknown) {
+  const error = (failure as { error?: AxiosQueryError }).error;
+  if (error?.status === 401) {
+    dispatch(generatedApi.util.invalidateTags(['auth']));
+  }
+}
 
 /**
  * The generated receipt mutations, each also writing its result into the stream's cache entry. The stream would
@@ -18,8 +30,9 @@ export const receiptApi = generatedApi.enhanceEndpoints({
           dispatch(liveApi.util.updateQueryData('getLiveState', undefined, (draft) => {
             draft.receipt = data;
           }));
-        } catch {
+        } catch (failure) {
           // The component shows the error from the mutation's own result; there is nothing to write.
+          onUnauthorised(failure, dispatch);
         }
       },
     },
@@ -30,8 +43,8 @@ export const receiptApi = generatedApi.enhanceEndpoints({
           dispatch(liveApi.util.updateQueryData('getLiveState', undefined, (draft) => {
             draft.receipt = null;
           }));
-        } catch {
-          // As above.
+        } catch (failure) {
+          onUnauthorised(failure, dispatch);
         }
       },
     },

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { RxHamburgerMenu } from 'react-icons/rx';
 
 import { useLogoutMutation } from '../../../communication/api/auth-api';
-import { LOGIN_URL, useLoginState } from '../../../hook/use-login-state';
+import { LOGIN_ROUTE, useLoginState } from '../../../hook/use-login-state';
 
 const ITEM_CLASS = 'block w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 text-sm cursor-pointer';
 
@@ -52,10 +52,10 @@ export function NavMenu() {
               </button>
             </>
           ) : (
-            // A link, not a fetch: the browser leaves the app for Google and comes back to /#/upload.
-            <a className={ITEM_CLASS} href={LOGIN_URL}>
+            // To the app's own login page, which shows that something is happening while the browser goes to Google.
+            <button className={ITEM_CLASS} onClick={() => { navigate(LOGIN_ROUTE); setMenuOpen(false); }}>
               Logga in
-            </a>
+            </button>
           )}
         </div>
       )}
