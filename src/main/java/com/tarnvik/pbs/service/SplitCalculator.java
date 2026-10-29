@@ -76,7 +76,7 @@ public final class SplitCalculator {
     Split.Unassigned unassigned = new Split.Unassigned(toOre(unassignedAdjustmentShare),
       toOre(unassignedSubtotal.add(unassignedAdjustmentShare)));
 
-    return new Split(receipt.receiptId(), List.copyOf(items), List.copyOf(people), unassigned);
+    return new Split(receipt.receiptId(), List.copyOf(items), List.copyOf(people), unassigned, false, null);
   }
 
   /** A bucket's part of the adjustments, in proportion to its items. Without any items there is nothing to share. */

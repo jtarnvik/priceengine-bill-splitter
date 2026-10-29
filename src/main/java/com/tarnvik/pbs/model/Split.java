@@ -12,8 +12,22 @@ import java.util.UUID;
  * @param people every participant, in the configured order, with what they had. The names travel here, so that the
  *               labels arrive with the state they belong to
  * @param unassigned what nobody has been ticked for yet
+ * @param done whether the owner has pressed "Klar": the amounts are final, and the friends can pay
+ * @param payment who to pay and how, present only while done: the owner's Swish number reaches the pages then and
+ *                at no other time
  */
-public record Split(UUID receiptId, List<Item> items, List<Person> people, Unassigned unassigned) {
+public record Split(UUID receiptId, List<Item> items, List<Person> people, Unassigned unassigned, boolean done,
+                    Payment payment) {
+  /** The same split, done with this payment, or not done when it is null. */
+  public Split withPayment(Payment newPayment) {
+    return new Split(receiptId, items, people, unassigned, newPayment != null, newPayment);
+  }
+
+  /** Whether every item has someone: "Kvar att dela på" is then zero, and the split can be marked done. */
+  public boolean allAssigned() {
+    return items.stream().noneMatch(item -> item.people().isEmpty());
+  }
+
   /** @param people in the configured order; empty when the item is unassigned */
   public record Item(int id, List<String> people) {}
 
@@ -32,4 +46,11 @@ public record Split(UUID receiptId, List<Item> items, List<Person> people, Unass
    * @param total the unassigned items and that part, to the öre: "Kvar att dela på"
    */
   public record Unassigned(long adjustmentShare, long total) {}
+
+  /**
+   * @param payee the participant who paid the bill and gets no Swish button
+   * @param swishNumber PBS_SWISH_NUMBER, exactly as written there
+   * @param message for the Swish payment: the restaurant and the date, within Swish's characters and 50 of them
+   */
+  public record Payment(String payee, String swishNumber, String message) {}
 }

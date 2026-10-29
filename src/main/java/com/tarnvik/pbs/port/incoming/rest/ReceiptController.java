@@ -1,16 +1,17 @@
 package com.tarnvik.pbs.port.incoming.rest;
 
 import com.tarnvik.pbs.model.Receipt;
-import com.tarnvik.pbs.port.incoming.rest.dto.ErrorMessageResponse;
-import com.tarnvik.pbs.service.ReceiptParseException;
+import com.tarnvik.pbs.port.incoming.rest.dto.DoneRequest;
 import com.tarnvik.pbs.service.ReceiptService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -49,10 +50,13 @@ public class ReceiptController {
     receiptService.reset();
   }
 
-  /** 502: the failure was Claude's, or on the way to it, not the request's. */
-  @ExceptionHandler(ReceiptParseException.class)
-  @ResponseStatus(HttpStatus.BAD_GATEWAY)
-  public ErrorMessageResponse handleParseFailure(ReceiptParseException e) {
-    return new ErrorMessageResponse(e.getMessage());
+  /**
+   * "Klar", or its undoing. The answer is only a status: the split, with the payment while done, reaches every page
+   * as the stream's {@code split} event.
+   */
+  @PutMapping("/done")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void setReceiptDone(@Valid @RequestBody DoneRequest request) {
+    receiptService.setDone(request.receiptId(), request.done());
   }
 }

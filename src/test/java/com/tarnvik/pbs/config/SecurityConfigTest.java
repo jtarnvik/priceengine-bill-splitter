@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -75,6 +76,35 @@ class SecurityConfigTest {
     mockMvc.perform(put("/api/protected/items/1/assignees").with(ownerLogin()).contentType(MediaType.APPLICATION_JSON)
         .content("{\"people\": []}"))
       .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void done_anonymous_gets401() throws Exception {
+    mockMvc.perform(put("/api/protected/receipt/done").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"receiptId\": \"" + UUID.randomUUID() + "\", \"done\": true}"))
+      .andExpect(status().isUnauthorized());
+  }
+
+  /** "Klar" only with everything assigned, no ticks while done, and undone again. */
+  @Test
+  void done_owner_getsThroughAndIsChecked() throws Exception {
+    MvcResult upload = mockMvc.perform(multipart("/api/protected/receipt").file(jpeg()).with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andReturn();
+    String json = upload.getResponse().getContentAsString();
+    String receiptId = JsonPath.read(json, "$.receiptId");
+    List<Integer> itemIds = JsonPath.read(json, "$.items[*].id");
+
+    mockMvc.perform(done(receiptId, true)).andExpect(status().isConflict());
+    for (int itemId : itemIds) {
+      mockMvc.perform(assignees(itemId, receiptId, "[\"Anna\"]")).andExpect(status().isNoContent());
+    }
+    mockMvc.perform(done(receiptId, true)).andExpect(status().isNoContent());
+    mockMvc.perform(assignees(itemIds.getFirst(), receiptId, "[\"Kia\"]"))
+      .andExpect(status().isConflict())
+      .andExpect(jsonPath("$.message").value("Notan är klar. Ångra klar för att ändra."));
+    mockMvc.perform(done(receiptId, false)).andExpect(status().isNoContent());
+    mockMvc.perform(assignees(itemIds.getFirst(), receiptId, "[\"Kia\"]")).andExpect(status().isNoContent());
   }
 
   @Test
@@ -184,6 +214,12 @@ class SecurityConfigTest {
     return put("/api/protected/items/" + itemId + "/assignees").with(ownerLogin())
       .contentType(MediaType.APPLICATION_JSON)
       .content("{\"receiptId\": \"" + receiptId + "\", \"people\": " + people + "}");
+  }
+
+  private static MockHttpServletRequestBuilder done(String receiptId, boolean done) {
+    return put("/api/protected/receipt/done").with(ownerLogin())
+      .contentType(MediaType.APPLICATION_JSON)
+      .content("{\"receiptId\": \"" + receiptId + "\", \"done\": " + done + "}");
   }
 
   private static MockMultipartFile jpeg() {

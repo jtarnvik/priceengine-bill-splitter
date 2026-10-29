@@ -19,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,8 +66,8 @@ class EventsControllerTest {
       List.of(new ReceiptItem(1, "Öl", 3, 6000L, 18000, null)), List.of(), 18000, true);
     Split split = new Split(receipt.receiptId(), List.of(new Split.Item(1, List.of("Anna"))),
       List.of(new Split.Person("Anna", List.of(new Split.ItemShare(1, 18000)), 0, 18000)),
-      new Split.Unassigned(0, 0));
-    when(receiptService.currentState()).thenReturn(Optional.of(new ReceiptState(receipt, split)));
+      new Split.Unassigned(0, 0), false, null);
+    when(receiptService.currentState()).thenReturn(Optional.of(new ReceiptState(receipt, split, Instant.now(), Instant.now())));
 
     MvcResult result = mockMvc.perform(get("/api/public/events")).andReturn();
 

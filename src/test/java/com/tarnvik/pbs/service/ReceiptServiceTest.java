@@ -7,6 +7,12 @@ import com.tarnvik.pbs.model.Split;
 import com.tarnvik.pbs.port.outgoing.sse.EventStreamProvider;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,13 +23,17 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class ReceiptServiceTest {
   private static final byte[] JPEG = {1, 2, 3};
   private static final List<String> PARTICIPANTS = List.of("Jesper", "Anders", "Anna", "Kia");
+  private static final String SWISH_NUMBER = "0700000000";
+  private static final Duration EXPIRY = Duration.ofMinutes(30);
 
   private final EventStreamProvider eventStreamProvider = mock(EventStreamProvider.class);
+  private final MovableClock clock = new MovableClock(Instant.parse("2026-10-29T18:00:00Z"));
 
   @Test
   void upload_numbersItemsInReceiptOrder() {
@@ -195,8 +205,124 @@ class ReceiptServiceTest {
   /** People are identified by first name, so two of the same could not be told apart. */
   @Test
   void constructor_sameNameTwice_fails() {
-    assertThatThrownBy(() -> new ReceiptService(jpeg -> null, eventStreamProvider, List.of("Anna", "Anna")))
+    assertThatThrownBy(() -> service(List.of("Anna", "Anna"), "Anna", SWISH_NUMBER))
       .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void constructor_payeeNotAmongParticipants_fails() {
+    assertThatThrownBy(() -> service(PARTICIPANTS, "Bertil", SWISH_NUMBER)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void constructor_noSwishNumber_fails() {
+    assertThatThrownBy(() -> service(PARTICIPANTS, "Jesper", " ")).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void setDone_everythingAssigned_carriesThePaymentUntilUndone() {
+    ReceiptService service = serviceWithTwoItems();
+    UUID receiptId = assignEverything(service);
+
+    service.setDone(receiptId, true);
+    Split done = currentSplit(service);
+    assertThat(done.done()).isTrue();
+    assertThat(done.payment()).isEqualTo(new Split.Payment("Jesper", SWISH_NUMBER, "Restaurang 2026-10-29"));
+    verify(eventStreamProvider).broadcastSplit(done);
+
+    service.setDone(receiptId, false);
+    Split undone = currentSplit(service);
+    assertThat(undone.done()).isFalse();
+    assertThat(undone.payment()).isNull();
+    // Twice: undone, the split equals the one broadcast after the last tick, before "Klar".
+    verify(eventStreamProvider, times(2)).broadcastSplit(undone);
+  }
+
+  @Test
+  void setDone_somethingUnassigned_isRefused() {
+    ReceiptService service = serviceWithTwoItems();
+    UUID receiptId = currentReceipt(service).receiptId();
+    service.setAssignees(1, receiptId, List.of("Anna"));
+
+    assertThatThrownBy(() -> service.setDone(receiptId, true)).isInstanceOf(NotAllAssignedException.class);
+    assertThat(currentSplit(service).payment()).isNull();
+  }
+
+  @Test
+  void setDone_earlierReceipt_isRefused() {
+    ReceiptService service = serviceWithTwoItems();
+    UUID earlier = assignEverything(service);
+    service.upload(JPEG);
+
+    assertThatThrownBy(() -> service.setDone(earlier, true)).isInstanceOf(StaleReceiptException.class);
+  }
+
+  /** The amounts in the Swish buttons must not change under a friend who is paying. */
+  @Test
+  void setAssignees_whileDone_isRefused() {
+    ReceiptService service = serviceWithTwoItems();
+    UUID receiptId = assignEverything(service);
+    service.setDone(receiptId, true);
+
+    assertThatThrownBy(() -> service.setAssignees(1, receiptId, List.of("Kia")))
+      .isInstanceOf(SplitDoneException.class);
+  }
+
+  @Test
+  void upload_startsNotDone() {
+    ReceiptService service = serviceWithTwoItems();
+    service.setDone(assignEverything(service), true);
+
+    service.upload(JPEG);
+
+    assertThat(currentSplit(service).done()).isFalse();
+    assertThat(currentSplit(service).payment()).isNull();
+  }
+
+  @Test
+  void expireIfIdle_expiresThirtyMinutesAfterTheLastChange() {
+    ReceiptService service = serviceWithTwoItems();
+
+    clock.advance(Duration.ofMinutes(29));
+    service.expireIfIdle();
+    assertThat(service.currentState()).isPresent();
+
+    clock.advance(Duration.ofMinutes(1));
+    service.expireIfIdle();
+    assertThat(service.currentState()).isEmpty();
+    verify(eventStreamProvider).broadcastReceipt(null);
+  }
+
+  @Test
+  void expireIfIdle_anyChangeRestartsTheTime() {
+    ReceiptService service = serviceWithTwoItems();
+    clock.advance(Duration.ofMinutes(20));
+    service.setAssignees(1, currentReceipt(service).receiptId(), List.of("Anna"));
+
+    clock.advance(Duration.ofMinutes(25));
+    service.expireIfIdle();
+    assertThat(service.currentState()).isPresent();
+
+    clock.advance(Duration.ofMinutes(5));
+    service.expireIfIdle();
+    assertThat(service.currentState()).isEmpty();
+  }
+
+  @Test
+  void swishMessage_dropsWhatSwishDoesNotTakeAndKeepsTheDate() {
+    LocalDate date = LocalDate.of(2026, 10, 29);
+
+    assertThat(ReceiptService.swishMessage("Kött & Fisk*  Åre", date)).isEqualTo("Kött Fisk Åre 2026-10-29");
+    assertThat(ReceiptService.swishMessage("", date)).isEqualTo("2026-10-29");
+    String longMessage = ReceiptService.swishMessage("A".repeat(60), date);
+    assertThat(longMessage).hasSize(50).endsWith(" 2026-10-29");
+  }
+
+  private UUID assignEverything(ReceiptService service) {
+    UUID receiptId = currentReceipt(service).receiptId();
+    service.setAssignees(1, receiptId, List.of("Anna"));
+    service.setAssignees(2, receiptId, List.of("Kia"));
+    return receiptId;
   }
 
   private ReceiptService serviceWithTwoItems() {
@@ -207,7 +333,12 @@ class ReceiptServiceTest {
   }
 
   private ReceiptService serviceAnswering(ParsedReceipt parsed) {
-    return new ReceiptService(jpeg -> parsed, eventStreamProvider, PARTICIPANTS);
+    return new ReceiptService(jpeg -> parsed, eventStreamProvider, PARTICIPANTS, "Jesper", SWISH_NUMBER, EXPIRY,
+      clock);
+  }
+
+  private ReceiptService service(List<String> participants, String payee, String swishNumber) {
+    return new ReceiptService(jpeg -> null, eventStreamProvider, participants, payee, swishNumber, EXPIRY, clock);
   }
 
   private static Receipt currentReceipt(ReceiptService service) {
@@ -225,5 +356,33 @@ class ReceiptServiceTest {
 
   private static ParsedReceipt.Item item(String name, int quantity, Long unitPrice, long price) {
     return new ParsedReceipt.Item(name, quantity, Optional.ofNullable(unitPrice), price, Optional.empty());
+  }
+
+  /** A clock the test moves forward, for the expiry. In UTC, so the message's date does not depend on the machine. */
+  private static final class MovableClock extends Clock {
+    private Instant now;
+
+    MovableClock(Instant start) {
+      now = start;
+    }
+
+    void advance(Duration duration) {
+      now = now.plus(duration);
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Instant instant() {
+      return now;
+    }
   }
 }

@@ -11,6 +11,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -22,7 +26,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The one receipt there is and how far it has been split, in memory: empty at startup, replaced by every upload,
- * emptied by a reset, changed by every tick. Every change is broadcast whole to every connected page.
+ * emptied by a reset or when it expires, changed by every tick and by "Klar". Every change is broadcast whole to
+ * every connected page.
  *
  * <p>Changes are serialised: the methods that change the state are synchronized, change and broadcast together.
  * Only the owner writes, but two quick taps on different rows are two concurrent requests; unserialised, one could
@@ -31,20 +36,46 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 @Service
 public class ReceiptService {
+  // Swish's message: at most 50 characters, letters (åäö included), digits, space and a few punctuation marks.
+  private static final int SWISH_MESSAGE_MAX_LENGTH = 50;
+  private static final String NOT_IN_SWISH_MESSAGE = "[^\\p{L}\\p{N} .,:;!?()\\-]";
+
   private final ReceiptParser receiptParser;
   private final EventStreamProvider eventStreamProvider;
   private final List<String> participants;
+  private final String payee;
+  private final String swishNumber;
+  private final Duration expiry;
+  private final Clock clock;
   private final AtomicReference<ReceiptState> current = new AtomicReference<>();
 
+  /**
+   * @param swishNumber the owner's number, from the environment: never logged, and sent to the pages only while the
+   *                    split is done
+   */
   public ReceiptService(ReceiptParser receiptParser, EventStreamProvider eventStreamProvider,
-                        @Value("${pbs.participants}") List<String> participants) {
+                        @Value("${pbs.participants}") List<String> participants,
+                        @Value("${pbs.payee}") String payee,
+                        @Value("${pbs.swish-number}") String swishNumber,
+                        @Value("${pbs.receipt-expiry}") Duration expiry,
+                        Clock clock) {
     if (participants.isEmpty() || new HashSet<>(participants).size() != participants.size()) {
       // People are identified by first name, so two of the same could not be told apart.
       throw new IllegalStateException("pbs.participants must name at least one person, each once: " + participants);
     }
+    if (!participants.contains(payee)) {
+      throw new IllegalStateException("pbs.payee must be one of pbs.participants: " + payee);
+    }
+    if (swishNumber.isBlank()) {
+      throw new IllegalStateException("pbs.swish-number (PBS_SWISH_NUMBER) must be set");
+    }
     this.receiptParser = receiptParser;
     this.eventStreamProvider = eventStreamProvider;
     this.participants = List.copyOf(participants);
+    this.payee = payee;
+    this.swishNumber = swishNumber.trim();
+    this.expiry = expiry;
+    this.clock = clock;
   }
 
   public Optional<ReceiptState> currentState() {
@@ -69,7 +100,8 @@ public class ReceiptService {
       log.info("Receipt from {} does not add up: the lines make {} öre, the receipt says {}",
         receipt.restaurantName(), receipt.linesTotal(), receipt.total());
     }
-    replace(new ReceiptState(receipt, SplitCalculator.calculate(receipt, Map.of(), participants)));
+    Instant now = clock.instant();
+    replace(new ReceiptState(receipt, SplitCalculator.calculate(receipt, Map.of(), participants), now, now));
     return receipt;
   }
 
@@ -88,11 +120,12 @@ public class ReceiptService {
    * @throws StaleReceiptException when it is not, or there is no receipt
    * @throws UnknownItemException when the receipt has no such item
    * @throws UnknownPersonException when a name is not among the participants
+   * @throws SplitDoneException when the split is marked done: the amounts must not change under a friend paying
    */
   public synchronized void setAssignees(int itemId, UUID receiptId, List<String> people) {
-    ReceiptState state = current.get();
-    if (state == null || !state.receipt().receiptId().equals(receiptId)) {
-      throw new StaleReceiptException();
+    ReceiptState state = currentFor(receiptId);
+    if (state.split().done()) {
+      throw new SplitDoneException();
     }
     if (state.receipt().items().stream().noneMatch(item -> item.id() == itemId)) {
       throw new UnknownItemException(itemId);
@@ -109,7 +142,69 @@ public class ReceiptService {
     // In participant order and each once, however the request listed them.
     assignees.put(itemId, participants.stream().filter(people::contains).toList());
     Split split = SplitCalculator.calculate(state.receipt(), assignees, participants);
-    current.set(new ReceiptState(state.receipt(), split));
+    change(state, split);
+  }
+
+  /**
+   * Marks the split done, or not — a whole state, never a toggle. Done, the split carries the payment, the owner's
+   * number included, and every page shows the Swish buttons; undone, the payment is gone from the next event.
+   *
+   * @throws StaleReceiptException when the receipt is not the current one, or there is none
+   * @throws NotAllAssignedException when marking done with something still unassigned
+   */
+  public synchronized void setDone(UUID receiptId, boolean done) {
+    ReceiptState state = currentFor(receiptId);
+    if (done && !state.split().allAssigned()) {
+      throw new NotAllAssignedException();
+    }
+    Split.Payment payment = null;
+    if (done) {
+      LocalDate uploadDate = state.uploadedAt().atZone(clock.getZone()).toLocalDate();
+      payment = new Split.Payment(payee, swishNumber, swishMessage(state.receipt().restaurantName(), uploadDate));
+    }
+    log.info("Split marked {}", done ? "done" : "not done");
+    change(state, state.split().withPayment(payment));
+  }
+
+  /**
+   * Resets the receipt once it has gone {@code pbs.receipt-expiry} without a change, number and all. Without it, a
+   * forgotten reset would leave the owner's number on a public page until the next restart, possibly for weeks.
+   */
+  public synchronized void expireIfIdle() {
+    ReceiptState state = current.get();
+    if (state != null && !clock.instant().isBefore(state.changedAt().plus(expiry))) {
+      log.info("Receipt expired, {} after its last change", expiry);
+      current.set(null);
+      eventStreamProvider.broadcastReceipt(null);
+    }
+  }
+
+  /**
+   * "&lt;restaurant&gt; &lt;date&gt;" for the Swish payment, characters Swish does not take dropped, the name cut so that the
+   * date always fits in Swish's 50.
+   */
+  static String swishMessage(String restaurantName, LocalDate date) {
+    String dateText = date.toString();
+    String name = restaurantName == null ? "" : restaurantName.replaceAll(NOT_IN_SWISH_MESSAGE, "")
+      .replaceAll("\\s+", " ").strip();
+    int room = SWISH_MESSAGE_MAX_LENGTH - dateText.length() - 1;
+    if (name.length() > room) {
+      name = name.substring(0, room).strip();
+    }
+    return name.isEmpty() ? dateText : name + " " + dateText;
+  }
+
+  /** The state, if it is that of the receipt the page holds. */
+  private ReceiptState currentFor(UUID receiptId) {
+    ReceiptState state = current.get();
+    if (state == null || !state.receipt().receiptId().equals(receiptId)) {
+      throw new StaleReceiptException();
+    }
+    return state;
+  }
+
+  private void change(ReceiptState state, Split split) {
+    current.set(new ReceiptState(state.receipt(), split, state.uploadedAt(), clock.instant()));
     eventStreamProvider.broadcastSplit(split);
   }
 

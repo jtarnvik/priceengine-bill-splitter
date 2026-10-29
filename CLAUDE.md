@@ -832,7 +832,7 @@ while done (State); S3 done as a whole state (State, API); S4 done and the payme
 updates); S5 the payee configured, S6 the payment card, S7 the message on the server and the link in the browser
 (The two pages); S8 the number as written, its form checked on a phone in 7.4.
 
-**7.1 The number and the logo** — owner, Claude walking through
+**7.1 The number and the logo** — owner, Claude walking through ✅
 - `PBS_SWISH_NUMBER=…` into `local-secrets.properties` and as `export PBS_SWISH_NUMBER=…` into `deployment/pbs.env` on
   the Mini, **before** 7.2's code runs anywhere: startup fails without it. Claude adds the empty name to both
   `.example` files and the Environment variables table.
