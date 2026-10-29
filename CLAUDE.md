@@ -50,12 +50,12 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 in progress (planned 2026-10-29).** pbs `v0.5.2` runs on
+**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 in progress (planned 2026-10-29).** pbs `v0.5.3` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; every open page gets the receipt live, and the public page greets a new one row by
-row. `v0.5.2` carries steps 6.1 to 6.3, released to be verified on a phone: the owner ticks who had what, and the
-public page shows each person's total and items.
+row. The owner ticks who had what, and the public page shows each person's total and items (steps 6.1 to 6.3,
+verified on a phone); `v0.5.3` greys a ticked row a little more.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost, and stays on it
@@ -473,8 +473,10 @@ The owner's page is a list: one row per item, four checkboxes per row, one per p
   2026-10-29). When the two differ, the sum warning is already showing, and the lines are what can be ticked.
 - **Show the drift instead of hiding it.** The public page shows the receipt total next to the sum of the four
   rounded totals. The friends round up as they see fit when paying.
-- **Discounts are spread in proportion to each person's subtotal.** Unassigned items count as a fifth bucket
-  while the owner is still ticking, so the numbers always add up.
+- **Discounts are spread in proportion to each person's subtotal** — the items they had, not the printed total —
+  so everyone gets the same percentage off what they had. All adjustment lines, öresavrundning too, are spread
+  together. Unassigned items count as a fifth bucket while the owner is still ticking, so the numbers always add
+  up.
 - **A tip is not on the pre-payment check.** If one is ever wanted, it is a row added by hand and split through
   the same checkboxes (phase 8).
 
@@ -644,7 +646,8 @@ keeps it.
   rather than push the price out. *Why not a `<table>`:* two lines per item needs `colspan`, and auto table layout
   sizes columns from content, so one long name moves every column. *Why not flex alone:* rows align only if every
   width is fixed by hand.
-- **A row someone has been ticked for (phase 6) greys its name and price, not the checkboxes.** Greying the
+- **A row someone has been ticked for (phase 6) greys its name, details and price, not the checkboxes**, a
+  little lighter than `gray-400` (made lighter after the first phone test, 2026-10-29). Greying the
   whole row would read as disabled, and a shared row still takes ticks. The ticked boxes show who; the rows still
   black are the ones left to do, which is where the eye should go.
 
@@ -775,7 +778,7 @@ day and are now in the design: P1 the names in the `split` event (Live updates),
 public page's order, to be tried at the table (The two pages), P4 optimistic ticks (Frontend data layer), P5
 serialised writes (State), P6 rounding and P7 splitting the lines (The split).
 
-**6.1 Split, assignment and the `split` event — backend** — Claude
+**6.1 Split, assignment and the `split` event — backend** — Claude ✅
 - `pbs.participants` in `application.properties`. The state becomes the receipt plus each item's set of people
   (empty when unassigned), one immutable record; an upload starts with every item unassigned, a reset empties it.
 - `SplitCalculator`, pure and unit-tested: each item divided evenly between its people; adjustments spread in
@@ -800,7 +803,7 @@ Verify, on the dev machine, the backend in `local` (`canned`):
    `["Anna","Kia"]` → `204`, and the stream shows a `split` event with the item under both and their shares.
 4. The same with an old `receiptId` → `409`; an unknown item → `404`; `["Bertil"]` → `400`; no cookie → `401`.
 
-**6.2 Ticking on the owner's page — frontend** — Claude
+**6.2 Ticking on the owner's page — frontend** — Claude ✅
 - The API client regenerated. The stream's cache entry gains a `split` part, written by the `split` listener, the
   `split` type hand-written in `types/live.ts`; a new `receiptId` clears it, and a `split` for another receipt is
   ignored.
@@ -816,7 +819,7 @@ Verify, with the backend in `local` (`canned`) and `npm run dev`, logged in, in 
 4. A reload keeps every tick. Rapid taps across several rows all stick.
 5. With the backend stopped, a tap is undone and a short message says it was not saved.
 
-**6.3 The split on the public page — frontend** — Claude
+**6.3 The split on the public page — frontend** — Claude ✅
 - As in P2 and P3: the four totals with the drift line, the items not yet assigned with "Kvar att dela på" — an
   assigned item leaves the list — and each person's items with their shares. When everything is assigned, the
   list says so instead of showing nothing.

@@ -14,6 +14,11 @@ const ROW_CLASS = 'grid grid-cols-[1fr_auto] gap-x-4 px-4 py-2 even:bg-white';
 const NAME_CLASS = 'min-w-0 break-words';
 const PRICE_CLASS = 'text-right tabular-nums whitespace-nowrap';
 const DETAIL_CLASS = 'text-xs text-gray-500';
+/**
+ * A ticked row, name, details and price alike: a little lighter than gray-400 (2026-10-29: gray-400 alone, with the
+ * details still gray-500, was hard to tell from an unticked row on a phone).
+ */
+const DONE_CLASS = 'text-gray-400/80';
 
 /** Each row starts this long after the one above, */
 const GREETING_STEP_MS = 40;
@@ -64,12 +69,13 @@ export function ReceiptList({ receipt, footer, greet = false, assignment }: Prop
           const people = assignment?.split.items.find((candidate) => candidate.id === item.id)?.people ?? [];
           // Someone ticked: the name and price grey, never the boxes — a shared row still takes ticks, and the rows
           // still black are the ones left to do.
-          const doneClass = people.length > 0 ? ' text-gray-400' : '';
+          const done = people.length > 0;
+          const doneClass = done ? ` ${DONE_CLASS}` : '';
           return (
             <li key={item.id} className={ROW_CLASS + rowGreeting.className} style={rowGreeting.style}>
               <div className={NAME_CLASS + doneClass}>
                 {item.name}
-                <ItemDetails item={item} />
+                <ItemDetails item={item} done={done} />
               </div>
               <div className={PRICE_CLASS + doneClass}>{formatKronor(item.price)}</div>
               {assignment && (
@@ -154,15 +160,16 @@ function AssigneeBoxes({ names, people, onChange }: AssigneeBoxesProps) {
 }
 
 /** Quantity and unit price ("3 × 60,00 kr") and the note, small and grey under the name. */
-function ItemDetails({ item }: { item: ReceiptItem }) {
+function ItemDetails({ item, done = false }: { item: ReceiptItem, done?: boolean }) {
+  const detailClass = done ? `text-xs ${DONE_CLASS}` : DETAIL_CLASS;
   let quantityText = null;
   if (item.quantity > 1) {
     quantityText = item.unitPrice !== null ? `${item.quantity} × ${formatKronor(item.unitPrice)}` : `${item.quantity} st`;
   }
   return (
     <>
-      {quantityText && <div className={DETAIL_CLASS}>{quantityText}</div>}
-      {item.note && <div className={DETAIL_CLASS}>{item.note}</div>}
+      {quantityText && <div className={detailClass}>{quantityText}</div>}
+      {item.note && <div className={detailClass}>{item.note}</div>}
     </>
   );
 }
