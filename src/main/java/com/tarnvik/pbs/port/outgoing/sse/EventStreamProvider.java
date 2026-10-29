@@ -53,16 +53,13 @@ public class EventStreamProvider {
     });
     emitter.onError(e -> remove(emitter));
     emitters.add(emitter);
-    Receipt receipt = currentReceipt.get().orElse(null);
-    // TEMPORARY logging for the phase 5 phone test, at INFO; back to debug, or out, afterwards.
-    log.info("Stream opened, {} open; sending receipt {}", emitters.size(), describe(receipt));
-    send(emitter, receiptEvent(receipt));
+    log.debug("SSE client connected, {} active connection(s)", emitters.size());
+    send(emitter, receiptEvent(currentReceipt.get().orElse(null)));
     return emitter;
   }
 
   /** The new receipt to every page, or {@code null} after a reset. */
   public synchronized void broadcastReceipt(Receipt receipt) {
-    log.info("Sending receipt {} to {} stream(s)", describe(receipt), emitters.size()); // TEMPORARY
     broadcast(receiptEvent(receipt));
   }
 
@@ -75,7 +72,6 @@ public class EventStreamProvider {
     if (emitters.isEmpty()) {
       return;
     }
-    log.info("Sending ping to {} stream(s)", emitters.size()); // TEMPORARY
     broadcast(SseEmitter.event().comment("ping"));
   }
 
@@ -95,13 +91,8 @@ public class EventStreamProvider {
     // The callbacks can fire more than once for one emitter (an error, then completion); only the first removal
     // is worth logging.
     if (emitters.remove(emitter)) {
-      log.info("Stream closed, {} open", emitters.size()); // TEMPORARY, was debug
+      log.debug("SSE client gone, {} active connection(s)", emitters.size());
     }
-  }
-
-  // TEMPORARY, for the logging above.
-  private static String describe(Receipt receipt) {
-    return receipt == null ? "null" : receipt.receiptId() + " (" + receipt.restaurantName() + ")";
   }
 
   private static SseEmitter.SseEventBuilder receiptEvent(Receipt receipt) {
@@ -119,7 +110,7 @@ public class EventStreamProvider {
       emitter.send(event);
     } catch (Exception e) {
       // Client gone (IOException) or emitter already completed; the error callback drops it.
-      log.info("Send failed, dropping the stream: {}", e.toString()); // TEMPORARY, was trace
+      log.trace("Dropping dead SSE emitter: {}", e.getMessage());
       emitter.completeWithError(e);
     }
   }

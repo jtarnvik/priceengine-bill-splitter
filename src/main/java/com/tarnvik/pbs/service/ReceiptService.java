@@ -58,6 +58,7 @@ public class ReceiptService {
 
   /** Empties the receipt for every phone, not only on the owner's screen. */
   public void reset() {
+    log.info("Receipt reset");
     current.set(null);
     eventStreamProvider.broadcastReceipt(null);
   }
