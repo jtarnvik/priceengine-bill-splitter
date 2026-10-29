@@ -313,6 +313,7 @@ class ReceiptServiceTest {
     LocalDate date = LocalDate.of(2026, 10, 29);
 
     assertThat(ReceiptService.swishMessage("Kött & Fisk*  Åre", date)).isEqualTo("Kött Fisk Åre 2026-10-29");
+    assertThat(ReceiptService.swishMessage("Café Noël – Bar/Kök", date)).isEqualTo("Cafe Noel - Bar Kök 2026-10-29");
     assertThat(ReceiptService.swishMessage("", date)).isEqualTo("2026-10-29");
     String longMessage = ReceiptService.swishMessage("A".repeat(60), date);
     assertThat(longMessage).hasSize(50).endsWith(" 2026-10-29");

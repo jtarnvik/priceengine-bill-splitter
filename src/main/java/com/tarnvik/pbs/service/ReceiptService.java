@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,9 +37,12 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 @Service
 public class ReceiptService {
-  // Swish's message: at most 50 characters, letters (åäö included), digits, space and a few punctuation marks.
+  // Swish's message: at most 50 characters from a-ö, A-Ö, 0-9, space and !?(),.-:; — an iPhone refuses a link with
+  // anything else. Other letters lose their accents (é becomes e); å, ä and ö are Swish's own and keep theirs.
   private static final int SWISH_MESSAGE_MAX_LENGTH = 50;
-  private static final String NOT_IN_SWISH_MESSAGE = "[^\\p{L}\\p{N} .,:;!?()\\-]";
+  private static final String SWISH_OWN_LETTERS = "åäöÅÄÖ";
+  private static final String NOT_IN_SWISH_MESSAGE = "[^a-zA-ZåäöÅÄÖ0-9 !?(),.:;\\-]";
+  private static final String DASHES = "[\\u2010-\\u2015\\u2212]";
 
   private final ReceiptParser receiptParser;
   private final EventStreamProvider eventStreamProvider;
@@ -180,18 +184,33 @@ public class ReceiptService {
   }
 
   /**
-   * "&lt;restaurant&gt; &lt;date&gt;" for the Swish payment, characters Swish does not take dropped, the name cut so that the
-   * date always fits in Swish's 50.
+   * "&lt;restaurant&gt; &lt;date&gt;" for the Swish payment, within Swish's characters, the name cut so that the date
+   * always fits in Swish's 50: accents dropped except on å, ä and ö, dashes made plain, anything else a space.
    */
   static String swishMessage(String restaurantName, LocalDate date) {
     String dateText = date.toString();
-    String name = restaurantName == null ? "" : restaurantName.replaceAll(NOT_IN_SWISH_MESSAGE, "")
-      .replaceAll("\\s+", " ").strip();
+    String name = restaurantName == null ? "" : toSwishCharacters(restaurantName);
     int room = SWISH_MESSAGE_MAX_LENGTH - dateText.length() - 1;
     if (name.length() > room) {
       name = name.substring(0, room).strip();
     }
     return name.isEmpty() ? dateText : name + " " + dateText;
+  }
+
+  private static String toSwishCharacters(String text) {
+    StringBuilder plain = new StringBuilder();
+    for (char character : text.toCharArray()) {
+      if (SWISH_OWN_LETTERS.indexOf(character) >= 0) {
+        plain.append(character);
+      } else {
+        plain.append(Normalizer.normalize(String.valueOf(character), Normalizer.Form.NFD).replaceAll("\\p{M}", ""));
+      }
+    }
+    return plain.toString()
+      .replaceAll(DASHES, "-")
+      .replaceAll(NOT_IN_SWISH_MESSAGE, " ")
+      .replaceAll("\\s+", " ")
+      .strip();
   }
 
   /** The state, if it is that of the receipt the page holds. */

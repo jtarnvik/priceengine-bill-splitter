@@ -50,12 +50,12 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.1` runs on
+**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.2` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
 shows each person's total and items. `v0.6.1` carries steps 7.2 and 7.3, released to be verified on a phone: "Klar",
-the Swish buttons, and the receipt expiring 30 minutes after its last change.
+the Swish buttons, and the receipt expiring 30 minutes after its last change; `v0.6.2` fixes the Swish link.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -653,7 +653,12 @@ stack, so its files are the reference (see Reference implementations).
   at the table*): one row per person with the total and a Swish button, the payee's row saying "Får betalt"
   instead. The payee is `pbs.payee`, one of the participants. The link is built in the browser, each parameter with
   `encodeURIComponent` — not `URLSearchParams`, which writes a space as `+`. The message, built on the server, is
-  "<restaurant> <date of the upload>", characters outside Swish's set dropped, cut to 50.
+  "<restaurant> <date of the upload>" within Swish's set — a–ö, 0–9, space and `!?(),.-:;` — accents dropped except
+  on å, ä and ö, dashes made plain, anything else a space, cut to 50.
+- **The link has exactly the form of Swish's developer guide** and nothing more:
+  `?sw=46701234567&amt=342.00&msg=Knut%20Upplandsgatan%202026-10-29&edit=amt`. *Why so strict* (found on a phone,
+  2026-10-29): with an extra `cur=SEK` an iPhone refused the link with "Länken som användes för att öppna har ett
+  felaktigt format"; another bill splitter hit the same with `cur` and a `+` for a space.
 - An empty state ("Inget kvitto ännu") for before the first upload and after a reset or restart.
 - **No connection status, except a quiet "Återansluter …"** once the stream has been down for 2 s. *Why 2 s:* the
   quick reconnect after a phone is unlocked never flashes it, and a page that is really cut off says so before
@@ -803,9 +808,8 @@ history.
 
 **Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
 broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
-link opening the Swish app: `https://app.swish.nu/1/p/sw/?sw=<number>&amt=<amount>&msg=<message>`. Swish's
-developer guide confirms the base and `sw` as the receiver, with optional amount and message and a way to let the
-payer edit them; the exact parameters are checked on a phone in 7.4.
+link opening the Swish app: `https://app.swish.nu/1/p/sw/?sw=<number>&amt=<amount>&msg=<message>&edit=amt`, in
+exactly the form of Swish's developer guide (see The two pages).
 - **Amount:** the person's rounded total. **Message:** the restaurant and the date, cut to Swish's 50 characters,
   URL-encoded (åäö, spaces).
 - **`edit=amt`**, so that a friend can change the amount in the app. Swish locks a prefilled amount otherwise, and
