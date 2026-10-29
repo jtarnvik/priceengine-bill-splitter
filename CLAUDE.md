@@ -50,11 +50,12 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 in progress (planned 2026-10-29).** pbs `v0.5.1` runs on
+**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 in progress (planned 2026-10-29).** pbs `v0.5.2` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; every open page gets the receipt live, and the public page greets a new one row by
-row. `v0.5.1` carries steps 6.1 and 6.2, released to be verified on a phone: the owner ticks who had what.
+row. `v0.5.2` carries steps 6.1 to 6.3, released to be verified on a phone: the owner ticks who had what, and the
+public page shows each person's total and items.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost, and stays on it
