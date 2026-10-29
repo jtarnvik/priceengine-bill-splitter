@@ -50,11 +50,11 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29), step 5.1 done.** pbs
+**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29), steps 5.1 and 5.2 done.** pbs
 `v0.4.6` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
 log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows,
 with a warning when they do not add up to the total; every open page gets the receipt live, the public page with
-the same rows. `v0.4.6` carries step 5.2, the greeting, released to be verified on a phone.
+the same rows. `v0.4.6` carries step 5.2, the greeting, verified on a phone.
 
 **Production runs the canned parser for now** (`pbs.receipt-parser=canned` in `application-production.properties`,
 from `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost while the
@@ -759,7 +759,7 @@ owner tab on `/#/upload` and a public tab on `/#/` in a 375 px device view:
 6. Stop the backend: "Återansluter …" appears after about 2 s and the receipt stays. Start it again: the notice
    goes, and the page says "Inget kvitto ännu" (a restart empties the state).
 
-**5.2 The greeting** — Claude
+**5.2 The greeting** — Claude ✅
 - A short fade with a slight rise per row, each starting a few tens of milliseconds after the one above, the
   stagger capped so that the last row of a long receipt has started within about a second. CSS keyframes in
   `index.css`, the delay per row inline.
