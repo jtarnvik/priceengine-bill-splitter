@@ -1,4 +1,5 @@
 import { pbsApi } from './base-api';
+import { generatedApi } from './generated-api';
 import { ConnectionStatus, LiveState, ReceiptEvent } from '../../types/live';
 
 const EVENTS_URL = '/api/public/events';
@@ -17,15 +18,19 @@ const MAX_RETRY_DELAY_MS = 30_000;
  *   while pbs restarts during a deploy, or the Vite proxy's while the backend is down — and iOS can leave it
  *   closed after the screen has been locked. Reopened here, after a delay that grows to a cap, and at once when the
  *   page becomes visible again.
+ *
+ * Every reconnect also asks `/api/auth/me` again. A restart of the server always shows up here, and it ends every
+ * session: without this, an upload page left on screen through a restart would go on believing it is logged in.
  */
 export const liveApi = pbsApi.injectEndpoints({
   endpoints: (build) => ({
     getLiveState: build.query<LiveState, void>({
       queryFn: () => ({ data: { receipt: undefined, status: 'connecting' } }),
-      async onCacheEntryAdded(_arg, { updateCachedData, cacheDataLoaded, cacheEntryRemoved }) {
+      async onCacheEntryAdded(_arg, { updateCachedData, cacheDataLoaded, cacheEntryRemoved, dispatch }) {
         await cacheDataLoaded;
 
         let source: EventSource | null = null;
+        let hasOpened = false;
         let retryTimer: number | undefined = undefined;
         let retryDelay = FIRST_RETRY_DELAY_MS;
 
@@ -46,6 +51,10 @@ export const liveApi = pbsApi.injectEndpoints({
           source.onopen = () => {
             retryDelay = FIRST_RETRY_DELAY_MS;
             setStatus('open');
+            if (hasOpened) {
+              dispatch(generatedApi.util.invalidateTags(['auth']));
+            }
+            hasOpened = true;
           };
           source.addEventListener('receipt', (event) => {
             const payload = JSON.parse(event.data) as ReceiptEvent;
