@@ -373,7 +373,8 @@ iOS limits canvas area, and a 48 MP photo exceeds it.
   2026-10-28). *Why the most capable model:* a misread price is the error that matters, and at one receipt per
   dinner the cost does not. **Measured (2026-10-29)** on a real 14-line receipt, photographed with the phone and
   downscaled to 1129 × 2576: 7 s, 5,395 tokens in and 611 out (thinking included), about 3.4 US cents, every line
-  right. The same receipt at 562 × 1280 gave the identical answer for 2.3 cents. Sonnet 5.5 costs half and Haiku
+  right. The same receipt at 562 × 1280 gave the identical answer for 2.3 cents. The Console, in whole cents and a
+  while behind, showed 3 and 2 cents for the two keys. Sonnet 5.5 costs half and Haiku
   5.5 a fraction. The recordings make a measured comparison cheap later: the same images through another model or
   effort, for öre.
 - **Structured output, typed.** `MessageCreateParams.builder()...outputConfig(ParsedReceipt.class)` gives a
