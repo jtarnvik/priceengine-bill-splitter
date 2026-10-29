@@ -5,6 +5,7 @@ import { Card } from '../components/common/card';
 import { ConfirmDialog } from '../components/common/confirm-dialog';
 import { View } from '../components/common/view';
 import { ReceiptList } from '../components/receipt-list';
+import { SwishTestPanel } from '../components/swish-test';
 import { UploadButton } from '../components/upload-button';
 import { useGetLiveStateQuery } from '../communication/api/live-api';
 import {
@@ -154,6 +155,8 @@ function OwnerReceipt() {
           </button>
         </div>
       )}
+      {/* TEMPORARY: the Swish link variants, while the right form is found. */}
+      {split?.payment && <SwishTestPanel payment={split.payment} />}
       <ConfirmDialog
         open={confirmingReset}
         message="Ta bort kvittot för alla? Det går inte att ångra."
