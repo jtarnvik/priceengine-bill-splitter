@@ -721,9 +721,10 @@ Verify, on the dev machine:
 
 Verify:
 1. The Console shows the workspace, its limit and the key.
-2. `grep -c '^ANTHROPIC_API_KEY=.' local-secrets.properties deployment/pbs.env` → `1` for each (on its machine).
+2. `grep -c '^ANTHROPIC_API_KEY=.' local-secrets.properties` on the dev machine and
+   `grep -c '^export ANTHROPIC_API_KEY=.' deployment/pbs.env` on the Mini (its lines start with `export`) → `1` each.
 
-**4.3 Upload and the receipt list — frontend** — Claude
+**4.3 Upload and the receipt list — frontend** — Claude ✅
 - The upload button, the canvas downscaling to JPEG, the upload and reset mutations (regenerated with
   `npm run generate-api`), "Läser kvittot…" and the error messages.
 - `Receipt` in `types/live.ts`; the stream's cache entry gains a `receipt` part, written by the `receipt` listener.

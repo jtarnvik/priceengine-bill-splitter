@@ -7,8 +7,8 @@ import java.util.UUID;
 
 /**
  * The receipt as the browser gets it: what Claude read, with an id per item and the result of the sum check. Sent
- * in the upload's answer and in the stream's {@code receipt} event, and hand-written in the frontend's live.ts
- * besides the generated type, since springdoc cannot see the stream.
+ * in the upload's answer and in the stream's {@code receipt} event; the frontend has it as a generated type, which
+ * its hand-written stream types in live.ts use.
  *
  * @param receiptId new on every upload, so that a request meant for an earlier receipt can be told apart
  * @param linesTotal the items and adjustments added up, in öre
