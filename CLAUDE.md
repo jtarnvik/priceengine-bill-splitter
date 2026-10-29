@@ -340,6 +340,7 @@ its files. Read publicbackend's `CLAUDE.md` "Deployment" for the reasoning, espe
 | `GOOGLE_CLIENT_SECRET` | |
 | `PBS_ALLOWED_EMAIL` | The single Google account admitted |
 | `ANTHROPIC_API_KEY` | pbs's own key — see below |
+| `PBS_SWISH_NUMBER` | The owner's Swish number, for the payment links (phase 7). Sent to pages only while a split is done |
 | `JAVA_OPTS` | `-Xmx512m` |
 
 **Give pbs its own Anthropic key, ideally in its own Console workspace with a spending limit.** A leak or a bug
