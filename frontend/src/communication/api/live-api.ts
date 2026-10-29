@@ -1,6 +1,7 @@
 import { pbsApi } from './base-api';
 import { generatedApi } from './generated-api';
-import { ConnectionStatus, LiveState, ReceiptEvent } from '../../types/live';
+import type { Receipt } from './generated-api';
+import { ConnectionStatus, LiveState, ReceiptEvent, Split } from '../../types/live';
 
 const EVENTS_URL = '/api/public/events';
 const FIRST_RETRY_DELAY_MS = 2_000;
@@ -22,10 +23,22 @@ const MAX_RETRY_DELAY_MS = 30_000;
  * Every reconnect also asks `/api/auth/me` again. A restart of the server always shows up here, and it ends every
  * session: without this, an upload page left on screen through a restart would go on believing it is logged in.
  */
+/**
+ * Every write of the receipt into the cache goes through here, from the stream and from the upload's answer alike.
+ * A receipt with another id drops the split held for the previous one, whose ticks would otherwise land on the new
+ * receipt's rows by item id; the new receipt's own `split` event follows at once.
+ */
+export function setReceipt(draft: LiveState, receipt: Receipt | null) {
+  if (draft.receipt?.receiptId !== receipt?.receiptId) {
+    draft.split = null;
+  }
+  draft.receipt = receipt;
+}
+
 export const liveApi = pbsApi.injectEndpoints({
   endpoints: (build) => ({
     getLiveState: build.query<LiveState, void>({
-      queryFn: () => ({ data: { receipt: undefined, status: 'connecting' } }),
+      queryFn: () => ({ data: { receipt: undefined, split: null, status: 'connecting' } }),
       async onCacheEntryAdded(_arg, { updateCachedData, cacheDataLoaded, cacheEntryRemoved, dispatch }) {
         await cacheDataLoaded;
 
@@ -59,7 +72,16 @@ export const liveApi = pbsApi.injectEndpoints({
           source.addEventListener('receipt', (event) => {
             const payload = JSON.parse(event.data) as ReceiptEvent;
             updateCachedData((draft) => {
-              draft.receipt = payload.receipt;
+              setReceipt(draft, payload.receipt);
+            });
+          });
+          source.addEventListener('split', (event) => {
+            const payload = JSON.parse(event.data) as Split;
+            updateCachedData((draft) => {
+              // A split for another receipt than the one held is ignored rather than applied to the wrong rows.
+              if (draft.receipt?.receiptId === payload.receiptId) {
+                draft.split = payload;
+              }
             });
           });
           source.onerror = () => {

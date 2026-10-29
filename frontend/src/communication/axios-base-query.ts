@@ -31,7 +31,13 @@ export interface AxiosQueryArgs {
  */
 export interface AxiosQueryError {
   status: number | undefined,
-  message: string
+  message: string,
+  /**
+   * The `message` of pbs's own error body (ErrorMessageResponse), when there is one: Swedish, written to be shown as
+   * it is. Absent for anything else — a 502 from Cloudflare or the Vite proxy while pbs is down, say — whose
+   * `message` is axios's English.
+   */
+  serverMessage?: string
 }
 
 /**
@@ -66,7 +72,8 @@ export const axiosBaseQuery = (): BaseQueryFn<AxiosQueryArgs, unknown, AxiosQuer
       return {
         error: {
           status: axios.isAxiosError(error) ? error.response?.status : undefined,
-          message: errorMessage(error)
+          message: errorMessage(error),
+          serverMessage: axios.isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined
         }
       };
     }

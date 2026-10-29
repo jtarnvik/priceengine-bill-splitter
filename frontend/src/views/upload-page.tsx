@@ -7,7 +7,11 @@ import { View } from '../components/common/view';
 import { ReceiptList } from '../components/receipt-list';
 import { UploadButton } from '../components/upload-button';
 import { useGetLiveStateQuery } from '../communication/api/live-api';
-import { useResetReceiptMutation, useUploadReceiptMutation } from '../communication/api/receipt-api';
+import {
+  useResetReceiptMutation,
+  useSetItemAssigneesMutation,
+  useUploadReceiptMutation
+} from '../communication/api/receipt-api';
 import { AxiosQueryError } from '../communication/axios-base-query';
 import { useLoginState } from '../hook/use-login-state';
 import { downscaleToJpeg } from '../util/downscale-image';
@@ -43,10 +47,12 @@ function OwnerReceipt() {
   const { data } = useGetLiveStateQuery();
   const [uploadReceipt, { isLoading: uploading }] = useUploadReceiptMutation();
   const [resetReceipt] = useResetReceiptMutation();
+  const [setItemAssignees] = useSetItemAssigneesMutation();
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const receipt = data?.receipt;
+  const split = data?.split;
 
   async function handleFileChosen(file: File) {
     setError(null);
@@ -55,9 +61,22 @@ function OwnerReceipt() {
       const image = await downscaleToJpeg(file);
       await uploadReceipt({ body: { image } }).unwrap();
     } catch (failure) {
-      setError(failureMessage(failure));
+      setError(failureMessage(failure, 'Kvittot kunde inte skickas. Försök igen.'));
     } finally {
       setPreparing(false);
+    }
+  }
+
+  // The box has already changed (an optimistic update); a failure has undone it, and says so here.
+  async function handleAssign(itemId: number, people: string[]) {
+    if (!receipt) {
+      return;
+    }
+    setError(null);
+    try {
+      await setItemAssignees({ id: itemId, assigneesRequest: { receiptId: receipt.receiptId, people } }).unwrap();
+    } catch (failure) {
+      setError(failureMessage(failure, 'Bocken kunde inte sparas. Försök igen.'));
     }
   }
 
@@ -67,7 +86,7 @@ function OwnerReceipt() {
     try {
       await resetReceipt().unwrap();
     } catch (failure) {
-      setError(failureMessage(failure));
+      setError(failureMessage(failure, 'Kvittot kunde inte återställas. Försök igen.'));
     }
   }
 
@@ -79,7 +98,15 @@ function OwnerReceipt() {
         {receipt && (
           <>
             <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
-            <ReceiptList receipt={receipt} totalLabel="Totalt" />
+            <ReceiptList
+              receipt={receipt}
+              footer={[
+                { label: 'Totalt', amount: receipt.total },
+                // Before the split's event, which follows the receipt at once, nothing is assigned.
+                { label: 'Kvar att dela på', amount: split?.unassigned.total ?? receipt.linesTotal },
+              ]}
+              assignment={split ? { split, onChange: handleAssign } : undefined}
+            />
           </>
         )}
         {error && <p role="alert" className="pb-2 text-red-700">{error}</p>}
@@ -104,20 +131,21 @@ function OwnerReceipt() {
 }
 
 /**
- * In Swedish whatever failed. A parse failure (502) brings the server's own Swedish message; the downscaling throws
- * an Error with one. Everything else gets a general one: axios's own messages are English and technical.
+ * In Swedish whatever failed. pbs's own error answers (a failed parse, a stale receipt) bring a Swedish message to
+ * show as it is; the downscaling throws an Error with one. Everything else gets the caller's general one: axios's
+ * own messages are English and technical.
  */
-function failureMessage(failure: unknown): string {
+function failureMessage(failure: unknown, fallback: string): string {
   if (failure instanceof Error) {
-    return failure.message;
-  }
-  if (isQueryError(failure) && failure.status === 502) {
     return failure.message;
   }
   if (isQueryError(failure) && failure.status === 401) {
     return 'Du är inte inloggad längre. Logga in igen från menyn.';
   }
-  return 'Kvittot kunde inte skickas. Försök igen.';
+  if (isQueryError(failure) && failure.serverMessage) {
+    return failure.serverMessage;
+  }
+  return fallback;
 }
 
 /** What unwrap() rejects with when the request itself failed: axiosBaseQuery's error. */

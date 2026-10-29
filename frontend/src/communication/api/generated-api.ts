@@ -1,11 +1,22 @@
 import { pbsApi as api } from "./base-api";
-export const addTagTypes = ["receipt", "auth"] as const;
+export const addTagTypes = ["split", "receipt", "auth"] as const;
 const injectedRtkApi = api
   .enhanceEndpoints({
     addTagTypes,
   })
   .injectEndpoints({
     endpoints: (build) => ({
+      setItemAssignees: build.mutation<
+        SetItemAssigneesApiResponse,
+        SetItemAssigneesApiArg
+      >({
+        query: (queryArg) => ({
+          url: `/api/protected/items/${queryArg.id}/assignees`,
+          method: "PUT",
+          body: queryArg.assigneesRequest,
+        }),
+        invalidatesTags: ["split"],
+      }),
       uploadReceipt: build.mutation<
         UploadReceiptApiResponse,
         UploadReceiptApiArg
@@ -31,6 +42,11 @@ const injectedRtkApi = api
     overrideExisting: false,
   });
 export { injectedRtkApi as generatedApi };
+export type SetItemAssigneesApiResponse = unknown;
+export type SetItemAssigneesApiArg = {
+  id: number;
+  assigneesRequest: AssigneesRequest;
+};
 export type UploadReceiptApiResponse = /** status 200 OK */ Receipt;
 export type UploadReceiptApiArg = {
   body: {
@@ -41,6 +57,13 @@ export type ResetReceiptApiResponse = unknown;
 export type ResetReceiptApiArg = void;
 export type GetMeApiResponse = /** status 200 OK */ MeResponse;
 export type GetMeApiArg = void;
+export type ErrorMessageResponse = {
+  message: string;
+};
+export type AssigneesRequest = {
+  receiptId: string;
+  people: string[];
+};
 export type ReceiptItem = {
   id: number;
   name: string;
@@ -62,13 +85,11 @@ export type Receipt = {
   linesTotal: number;
   totalMatches: boolean;
 };
-export type ErrorMessageResponse = {
-  message: string;
-};
 export type MeResponse = {
   email: string;
 };
 export const {
+  useSetItemAssigneesMutation,
   useUploadReceiptMutation,
   useResetReceiptMutation,
   useGetMeQuery,

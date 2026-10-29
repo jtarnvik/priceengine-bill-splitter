@@ -11,11 +11,41 @@ export interface ReceiptEvent {
   receipt: Receipt | null
 }
 
+/**
+ * `event: split` — who had what, and what it comes to, after every change. Matches Split in Java; amounts in öre.
+ * Every participant is in `people`, in the configured order: the names come from here.
+ */
+export interface Split {
+  receiptId: string,
+  /** Every item of the receipt, in its order; `people` is empty when nobody has been ticked for it. */
+  items: SplitItem[],
+  people: SplitPerson[],
+  /** What nobody has been ticked for yet: "Kvar att dela på". */
+  unassigned: { adjustmentShare: number, total: number }
+}
+
+export interface SplitItem {
+  id: number,
+  people: string[]
+}
+
+export interface SplitPerson {
+  name: string,
+  /** The person's share of each item they had; the shares of one item add up to its price. */
+  items: { id: number, share: number }[],
+  /** Their part of the discounts and rounding lines. */
+  adjustmentShare: number,
+  /** Rounded to whole kronor. */
+  total: number
+}
+
 export type ConnectionStatus = 'connecting' | 'open' | 'reconnecting';
 
 /** What the stream's cache entry holds: the latest of each event, plus how the connection is doing. */
 export interface LiveState {
   /** `undefined` until the first `receipt` event, which the server sends on every connect; `null` is "no receipt". */
   receipt: Receipt | null | undefined,
+  /** The split of `receipt`, `null` until its `split` event; never one of another receipt. */
+  split: Split | null,
   status: ConnectionStatus
 }

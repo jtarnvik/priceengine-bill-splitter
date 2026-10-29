@@ -39,7 +39,7 @@ function PublicReceipt({ receipt }: { receipt: Receipt }) {
   return (
     <Card>
       <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
-      <ReceiptList receipt={receipt} totalLabel="Kvar att dela på" greet={greet} />
+      <ReceiptList receipt={receipt} footer={[{ label: 'Kvar att dela på', amount: receipt.total }]} greet={greet} />
     </Card>
   );
 }
