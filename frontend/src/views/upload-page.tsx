@@ -14,11 +14,13 @@ import {
   useUploadReceiptMutation
 } from '../communication/api/receipt-api';
 import { AxiosQueryError } from '../communication/axios-base-query';
+import { useGetSettingsQuery } from '../communication/api/generated-api';
 import { useLoginState } from '../hook/use-login-state';
 import { downscaleToJpeg } from '../util/downscale-image';
 
 const SECONDARY_BUTTON_CLASS =
-  'rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:bg-gray-100 cursor-pointer disabled:cursor-default';
+  'rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:bg-gray-100 cursor-pointer '
+  + 'disabled:cursor-default disabled:text-gray-400 disabled:hover:bg-white';
 
 // The owner's page, behind login.
 export function UploadPage() {
@@ -53,12 +55,15 @@ function OwnerReceipt() {
   const [resetReceipt] = useResetReceiptMutation();
   const [setItemAssignees] = useSetItemAssigneesMutation();
   const [setReceiptDone, { isLoading: settingDone }] = useSetReceiptDoneMutation();
+  const { data: settings } = useGetSettingsQuery();
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const receipt = data?.receipt;
   const split = data?.split;
   const allAssigned = split?.items.every((item) => item.people.length > 0) ?? false;
+  // Only on canned receipts, which exist to be tested with: ticking a long one by hand gets tedious fast.
+  const offerRandomTicks = settings?.receiptParser === 'canned' && !!split && !split.done;
 
   async function handleFileChosen(file: File) {
     setError(null);
@@ -83,6 +88,19 @@ function OwnerReceipt() {
       await setItemAssignees({ id: itemId, assigneesRequest: { receiptId: receipt.receiptId, people } }).unwrap();
     } catch (failure) {
       setError(failureMessage(failure, 'Bocken kunde inte sparas. Försök igen.'));
+    }
+  }
+
+  // One random person on every row nobody has yet, each as an ordinary tick; rows already ticked are left alone.
+  function handleRandomTicks() {
+    if (!split) {
+      return;
+    }
+    const names = split.people.map((person) => person.name);
+    for (const item of split.items) {
+      if (item.people.length === 0) {
+        void handleAssign(item.id, [names[Math.floor(Math.random() * names.length)]]);
+      }
     }
   }
 
@@ -152,6 +170,16 @@ function OwnerReceipt() {
           <button className={SECONDARY_BUTTON_CLASS} onClick={() => setConfirmingReset(true)}>
             Återställ
           </button>
+          {offerRandomTicks && (
+            <button
+              className={`${SECONDARY_BUTTON_CLASS} ml-auto`}
+              disabled={allAssigned}
+              title="Bockar i en slumpad person på varje rad som ingen har ännu. Bara med inspelade kvitton."
+              onClick={handleRandomTicks}
+            >
+              Slumpa
+            </button>
+          )}
         </div>
       )}
       <ConfirmDialog

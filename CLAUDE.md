@@ -57,8 +57,8 @@ they do not add up to the total; the owner ticks who had what; every open page f
 shows each person's total and items. Steps 7.2 and 7.3 are verified on a phone — "Klar", the payment card, the
 receipt expiring 30 minutes after its last change — and the Swish link, once tried with another person's number:
 from the owner's own phone it can only fail (see The two pages). Four rounds of a temporary test panel found that;
-the panel is gone, and the real button's link was right all along. **`PBS_SWISH_NUMBER` on the Mini still holds the
-other person's number from that test — put the owner's back before the next deploy.**
+the panel is gone, and the real button's link was right all along. The owner's number is back in
+`PBS_SWISH_NUMBER`.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -681,7 +681,9 @@ keeps it.
   message in Swedish and the button again.
 - **With a receipt:** the restaurant, the rows, and a footer — "Totalt" and, from phase 6, "Kvar att dela på",
   which falls as items are ticked. Then (phase 7) "Klar", enabled once nothing is left, and while done "Ångra klar"
-  with the boxes disabled. Then "Återställ", asking first in a `<dialog>` styled like the app. *Not
+  with the boxes disabled. Then "Återställ", asking first in a `<dialog>` styled like the app. On canned receipts
+  only, "Slumpa" at the row's far right ticks one random person on every row nobody has yet — for testing long
+  receipts, which by hand gets tedious (added 2026-10-29; `GET /api/protected/settings` tells the page the parser). *Not
   `window.confirm`:* it puts "pbs.tarnvik.com säger…" above the question.
 - **A row is two lines**: the name and the price; under it (phase 6) four checkboxes, each labelled with a
   person's first name — the label is the tap target, larger than the checkbox. Quantity and unit price ("3 ×
@@ -733,6 +735,7 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 | DELETE | `/api/protected/receipt` | Owner | Reset: no receipt, broadcast to every phone |
 | PUT | `/api/protected/items/{id}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
 | PUT | `/api/protected/receipt/done` | Owner | Done or not, as a whole state (phase 7); 409 if stale or something is left |
+| GET | `/api/protected/settings` | Owner | How pbs is set up: so far the receipt parser; phase 9 adds the names |
 | POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
 Corrections (edit a row, add a row, remove a row) arrive with phase 8.

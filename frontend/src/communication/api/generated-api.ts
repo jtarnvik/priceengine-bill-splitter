@@ -1,5 +1,5 @@
 import { pbsApi as api } from "./base-api";
-export const addTagTypes = ["receipt", "split", "auth"] as const;
+export const addTagTypes = ["receipt", "split", "settings", "auth"] as const;
 const injectedRtkApi = api
   .enhanceEndpoints({
     addTagTypes,
@@ -45,6 +45,10 @@ const injectedRtkApi = api
           invalidatesTags: ["receipt"],
         },
       ),
+      getSettings: build.query<GetSettingsApiResponse, GetSettingsApiArg>({
+        query: () => ({ url: `/api/protected/settings` }),
+        providesTags: ["settings"],
+      }),
       getMe: build.query<GetMeApiResponse, GetMeApiArg>({
         query: () => ({ url: `/api/auth/me` }),
         providesTags: ["auth"],
@@ -70,6 +74,8 @@ export type UploadReceiptApiArg = {
 };
 export type ResetReceiptApiResponse = unknown;
 export type ResetReceiptApiArg = void;
+export type GetSettingsApiResponse = /** status 200 OK */ SettingsResponse;
+export type GetSettingsApiArg = void;
 export type GetMeApiResponse = /** status 200 OK */ MeResponse;
 export type GetMeApiArg = void;
 export type ErrorMessageResponse = {
@@ -104,6 +110,9 @@ export type Receipt = {
   linesTotal: number;
   totalMatches: boolean;
 };
+export type SettingsResponse = {
+  receiptParser: string;
+};
 export type MeResponse = {
   email: string;
 };
@@ -112,5 +121,6 @@ export const {
   useSetItemAssigneesMutation,
   useUploadReceiptMutation,
   useResetReceiptMutation,
+  useGetSettingsQuery,
   useGetMeQuery,
 } = injectedRtkApi;

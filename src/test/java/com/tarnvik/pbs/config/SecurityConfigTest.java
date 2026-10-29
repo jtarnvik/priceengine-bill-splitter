@@ -108,6 +108,19 @@ class SecurityConfigTest {
   }
 
   @Test
+  void settings_anonymous_gets401() throws Exception {
+    mockMvc.perform(get("/api/protected/settings"))
+      .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void settings_owner_getsTheParser() throws Exception {
+    mockMvc.perform(get("/api/protected/settings").with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.receiptParser").value("canned"));
+  }
+
+  @Test
   void receiptReset_anonymous_gets401() throws Exception {
     mockMvc.perform(delete("/api/protected/receipt"))
       .andExpect(status().isUnauthorized());
