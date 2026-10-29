@@ -1,8 +1,10 @@
 import { Card } from '../components/common/card';
 import { View } from '../components/common/view';
 import { ReceiptList } from '../components/receipt-list';
+import { Receipt } from '../communication/api/generated-api';
 import { useGetLiveStateQuery } from '../communication/api/live-api';
 import { useDelayedFlag } from '../hook/use-delayed-flag';
+import { useGreeting } from '../hook/use-greeting';
 
 /**
  * Long enough that the quick reconnect after a phone is unlocked never shows the notice, short enough that a page
@@ -25,12 +27,19 @@ export function PublicPage() {
           <p className="py-2">Inget kvitto ännu.</p>
         </Card>
       )}
-      {receipt && (
-        <Card>
-          <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
-          <ReceiptList receipt={receipt} totalLabel="Kvar att dela på" />
-        </Card>
-      )}
+      {/* Keyed, so that a new receipt mounts anew: its rows are new elements, and the greeting is decided afresh. */}
+      {receipt && <PublicReceipt key={receipt.receiptId} receipt={receipt} />}
     </View>
+  );
+}
+
+function PublicReceipt({ receipt }: { receipt: Receipt }) {
+  const greet = useGreeting(receipt.receiptId);
+
+  return (
+    <Card>
+      <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
+      <ReceiptList receipt={receipt} totalLabel="Kvar att dela på" greet={greet} />
+    </Card>
   );
 }

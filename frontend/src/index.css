@@ -11,6 +11,24 @@
   --color-brand: #1a8a47;
   --color-brand-hover: #4aa36e;
   --color-brand-dark: #126132;
+
+  /*
+    The public page's greeting of a new receipt: each row fades in with a slight rise. `both` keeps a row hidden
+    during its delay. Used as motion-safe:animate-row-greeting, so under prefers-reduced-motion the rows are simply
+    there.
+  */
+  --animate-row-greeting: row-greeting 300ms ease-out both;
+
+  @keyframes row-greeting {
+    from {
+      opacity: 0;
+      transform: translateY(0.375rem);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
 /*
