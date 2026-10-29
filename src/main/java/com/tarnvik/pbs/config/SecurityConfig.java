@@ -2,6 +2,7 @@ package com.tarnvik.pbs.config;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,6 +18,7 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
  * exists there only because of a separate frontend origin or a database: no CORS, no Spring Session, no pending
  * users. Sessions are in memory, so a restart logs the owner out.
  */
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -60,7 +62,11 @@ public class SecurityConfig {
       // error and explains nothing. Every other path keeps oauth2Login's redirect.
       .exceptionHandling(ex -> ex
         .defaultAuthenticationEntryPointFor(
-          (request, response, authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED),
+          (request, response, authException) -> {
+            // TEMPORARY, for the phase 5 phone test: an upload turned away here never reaches the controller.
+            log.info("401 for {} {}", request.getMethod(), request.getRequestURI());
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+          },
           PathPatternRequestMatcher.withDefaults().matcher("/api/**")
         )
       )

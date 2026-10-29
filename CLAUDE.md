@@ -50,11 +50,13 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29).** pbs `v0.4.2` runs on
+**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29).** pbs `v0.4.3` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; every open page gets the receipt live. `v0.4.2` carries step 5.1, released to be
-verified on a phone in production: the public page shows the rows too, and the viewer count is gone.
+verified on a phone in production: the public page shows the rows too, and the viewer count is gone. **`v0.4.3`
+adds temporary INFO logging** for that test — uploads, resets, 401 answers, every stream opened and closed and every
+event and ping sent — each line marked `TEMPORARY` in the code, to be removed or turned down once 5.1 is verified.
 
 **Production runs the canned parser for now** (`pbs.receipt-parser=canned` in `application-production.properties`,
 from `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost while the

@@ -6,11 +6,13 @@ import com.tarnvik.pbs.service.ReceiptParseException;
 import com.tarnvik.pbs.service.ReceiptService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -24,6 +26,7 @@ import java.io.IOException;
  * The owner's receipt: upload a photo to have it parsed, or reset. Both change what every connected page shows. The
  * upload is the only endpoint that costs money per call; it is behind login, and SecurityConfigTest says so.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/protected/receipt")
 @Tag(name = "receipt")
@@ -36,7 +39,11 @@ public class ReceiptController {
    * rather than sent to Claude under the wrong media type. A parse takes perhaps 10–30 s and is answered when done.
    */
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public Receipt uploadReceipt(@RequestParam("image") MultipartFile image) throws IOException {
+  public Receipt uploadReceipt(@RequestParam("image") MultipartFile image,
+                               @RequestHeader(value = "User-Agent", required = false) String userAgent)
+    throws IOException {
+    // TEMPORARY, for the phase 5 phone test.
+    log.info("Upload received: {} bytes, {}, from {}", image.getSize(), image.getContentType(), userAgent);
     if (image.isEmpty() || !MediaType.IMAGE_JPEG_VALUE.equals(image.getContentType())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The image part must be a non-empty image/jpeg");
     }
@@ -46,6 +53,7 @@ public class ReceiptController {
   @DeleteMapping
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void resetReceipt() {
+    log.info("Reset requested"); // TEMPORARY
     receiptService.reset();
   }
 
