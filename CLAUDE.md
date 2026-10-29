@@ -715,7 +715,7 @@ Verify, on the dev machine:
    `204`, and the stream shows `{"receipt":null}`.
 5. Without the cookie, both → 401.
 
-**4.2 pbs's own Anthropic key** — owner, Claude walking through
+**4.2 pbs's own Anthropic key** — owner, Claude walking through ✅
 - In the Anthropic Console: a workspace `pbs` with a monthly spending limit, and a key in it (see Environment
   variables). Into `local-secrets.properties` and into `deployment/pbs.env` on the Mini.
 
