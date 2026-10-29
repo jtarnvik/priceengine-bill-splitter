@@ -50,15 +50,16 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29), steps 5.1 and 5.2 done.** pbs
-`v0.4.6` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
-log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows,
-with a warning when they do not add up to the total; every open page gets the receipt live, the public page with
-the same rows. `v0.4.6` carries step 5.2, the greeting, verified on a phone.
+**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 not planned yet.** pbs `v0.5.0` runs on the Mini at
+`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
+log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
+they do not add up to the total; every open page gets the receipt live, and the public page greets a new one row by
+row.
 
-**Production runs the canned parser for now** (`pbs.receipt-parser=canned` in `application-production.properties`,
-from `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost while the
-owner tries the GUI. Remove that line to parse with Claude again.
+**Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
+`v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost, and stays on it
+through phase 6 (decided 2026-10-29): the canned receipts are all there is to test with until a dinner. Remove that
+line to parse with Claude again; phase 9 makes it a switch in the app.
 
 The design below was worked out in one discussion (October 2026) before the repository existed. Treat it as decided
 unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text from this file as it is
@@ -89,7 +90,7 @@ recordings of parses (see Recording and canned responses).
 - **No database.** All state is in memory and lost on restart, which is accepted: a split lives for one dinner.
 - **One receipt at a time.** Uploading a new one replaces the old.
 - **The four people are hardcoded**, first names only, in `application.properties`: Jesper, Anders, Anna and
-  Kia. *Later, perhaps:* the owner changes them in the app. The browser therefore fetches them from the backend
+  Kia. The owner will change them in the app (phase 9). The browser therefore fetches them from the backend
   (phase 6) rather than having them built in.
 - **The repository is public.** Nothing in it may identify the owner beyond what a first name does: the allowed
   Google email, the client secret and the Anthropic key all come from the environment.
@@ -513,7 +514,10 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
   receipt ignores it rather than applying ticks to the wrong rows.
 - **The animation keys on a *new `receiptId`*, not on the `receipt` event arriving.** State-on-connect sends the
   `receipt` event again on every reconnect, and a phone that wakes from its lock screen must not replay the
-  greeting for a receipt it has already shown.
+  greeting for a receipt it has already shown. The last greeted id is kept in `sessionStorage` (`use-greeting.ts`),
+  so a reload of the tab does not replay it either, while a new tab plays it. The public page keys its receipt view
+  on the `receiptId`: item ids repeat from receipt to receipt, so React would otherwise reuse the rows and a new
+  receipt would never animate.
 - *Why two events and not one:* the receipt is the large part and changes once a dinner, the split is small and
   changes constantly, and the page reacts differently to each. Splitting by kind keeps the frequent event small
   and makes "a new receipt arrived" something the page is told rather than has to work out.
@@ -600,6 +604,9 @@ stack, so its files are the reference (see Reference implementations).
   total alone says something is wrong without saying what. At the table that can also be said aloud.
 - From phase 7, a Swish button per person once the owner marks the split done.
 - An empty state ("Inget kvitto ännu") for before the first upload and after a reset or restart.
+- **No connection status, except a quiet "Återansluter …"** once the stream has been down for 2 s. *Why 2 s:* the
+  quick reconnect after a phone is unlocked never flashes it, and a page that is really cut off says so before
+  anyone wonders why nothing changes.
 
 **`/#/upload` — the owner, behind login.** Upload, the parsed rows with their checkboxes, the sum-check warning,
 reset, and later corrections. It draws the receipt from the stream like the public page, so a reload mid-dinner
@@ -720,73 +727,14 @@ recorded on the Mini; an anonymous upload gets 401 through Cloudflare and Caddy.
 the canned parser (see Status). What it established is now in Receipt parsing, Frontend data layer and
 Deployment; the worked step plan is in git history.
 
-**Phase 5 - The receipt on every phone.** Phase 4 already sends the `receipt` event to every connected reader,
-and to a reader arriving later as its first event on connect, so no separate fetch is needed: a phone that comes
-online after the parse gets the receipt the moment it connects. This phase gives the public page its real content:
-- The restaurant as a heading, the items in receipt order, and a last row "Kvar att dela på" — the receipt total,
-  until phase 6 starts taking items off. The sum warning shows here too (see The two pages).
-- **The rows of a new receipt appear one by one, subtly** — a short fade with a slight rise, each row a few tens of
-  milliseconds after the one above. Keyed on a new `receiptId`, so a reconnect or an unlocked phone does not
-  replay it (see Live updates); skipped under `prefers-reduced-motion`.
-- Phase 2's dummies leave: the viewer count, page and server alike, and the connection status line, replaced by a
-  quiet "Återansluter …" shown only once the stream has been down for 2 s, so that the quick reconnect after a
-  phone is unlocked never flashes it (decided 2026-10-29).
-- **Production stays on the canned parser through `v0.5.0`** (decided 2026-10-29): this phase changes only how a
-  receipt is shown, which the canned receipt tests fully at no cost.
-
-#### Phase 5 — step by step
-
-Planned 2026-10-29; the decisions are above and in The two pages and Live updates.
-
-**5.1 The public page's real content** — Claude ✅
-- **Backend:** the `viewers` event goes, with `ViewersResponse` and its broadcasts on connect and disconnect. The
-  provider still counts its emitters and logs the count at debug, for phase 10's dashboard. The stream is then the
-  `receipt` event on connect and on every change, and the heartbeat.
-- **Frontend:** `LiveState` loses `viewers`. The public page: the restaurant as a heading, the rows as on the
-  upload page (`ReceiptList`, its footer labelled "Kvar att dela på" there), the adjustments, the sum warning, or
-  "Inget kvitto ännu". The status line goes; "Återansluter …" shows once the status has been `reconnecting` for 2 s.
-- Tests: the stream's first event is the receipt, and no `viewers` event is sent.
-
-Verify, on the dev machine, the backend in `local` (`canned`, the hand-written recordings) and `npm run dev`, an
-owner tab on `/#/upload` and a public tab on `/#/` in a 375 px device view:
-1. `mvn verify` → `BUILD SUCCESS`.
-2. `curl -sN localhost:8082/api/public/events` shows `event:receipt` at once, no `event:viewers`, and `:ping`
-   20 s later.
-3. Without a receipt, the public tab shows "Inget kvitto ännu" and nothing else: no viewer count, no status line.
-4. An upload in the owner tab: the public tab shows the restaurant and the rows exactly as the upload page draws
-   them, adjustments included, with "Kvar att dela på" and the total as the last row.
-5. The recording that does not add up (Kebab Exempel) shows the warning on the public tab too.
-6. Stop the backend: "Återansluter …" appears after about 2 s and the receipt stays. Start it again: the notice
-   goes, and the page says "Inget kvitto ännu" (a restart empties the state).
-
-**5.2 The greeting** — Claude ✅
-- A short fade with a slight rise per row, each starting a few tens of milliseconds after the one above, the
-  stagger capped so that the last row of a long receipt has started within about a second. CSS keyframes in
-  `index.css`, the delay per row inline.
-- On the public page only, and only for a `receiptId` the tab has not greeted before. The last greeted id is kept in
-  `sessionStorage`: a reconnect, an unlocked phone and a reload of the tab do not replay it, a new tab does.
-- Skipped under `prefers-reduced-motion`: the rows are simply there.
-
-Verify, set up as for 5.1:
-1. An upload in the owner tab: the public tab's rows appear one by one, subtly; the last has started within about
-   a second. The owner tab's rows appear at once.
-2. Reload the public tab: no replay. Toggle DevTools' network to Offline and back: no replay. A new public tab:
-   the greeting plays.
-3. "Återställ" and a new upload: the greeting plays again, the receipt id being new.
-4. With reduced motion emulated (DevTools → Rendering → `prefers-reduced-motion: reduce`), the rows appear at once.
-
-**5.3 Release `v0.5.0` and the production test** — owner, with Claude preparing
-- `./change-version.sh 0.5.0`, push the commit **and** the tag, Ctrl-C and `just doit` on the Mini. Production
-  stays on `canned`.
-
-Verify:
-1. The startup log says `Starting PbsApplication v0.5.0`.
-2. **On two phones** (or a phone and a computer): the public page on one, the upload page on the other. An upload
-   shows the rows appearing one by one on the public page, with "Kvar att dela på".
-3. Lock the public phone for a minute and unlock it: the receipt is there, no replay, no "Återansluter …" left.
-4. "Återställ" brings "Inget kvitto ännu" to the public phone.
-5. `curl -sN --max-time 25 https://pbs.tarnvik.com/api/public/events` shows `event:receipt` and a `:ping`, and
-   no `event:viewers`.
+**Phase 5 - The receipt on every phone** ✅ (2026-10-29). The public page's real content: the restaurant, the same
+rows as the owner's page with "Kvar att dela på" last, and the sum warning; a new receipt greeted row by row, once
+per tab, not under reduced motion. Phase 2's dummies left — the `viewers` event, the count and the status line —
+and "Återansluter …" shows after 2 s without a stream. Testing on a phone found two login problems, fixed on the
+way: "Logga in" now opens a waiting page, and a lost session, which every restart causes, sends the upload page to
+the public page. Released for the phone as `v0.4.2` to `v0.4.6` (`v0.4.3` with temporary logging), then `v0.5.0`,
+with production on the canned parser throughout. What it established is now in Authentication, Live updates and
+The two pages; the worked step plan is in git history.
 
 **Phase 6 - Split and broadcast.** The owner assigns items; every reader follows.
 - **The owner's page:** the checkbox line on every row, one box per person, labelled with the first name; the
@@ -803,8 +751,9 @@ Verify:
   discussed anyway.
 - **The public page:** an assigned item leaves the list of items; each person's total and "Kvar att dela på"
   update continuously. Whether assigned items reappear under each person: see The two pages.
-- The split calculation as in The split. The real dinner test — so production goes back to the `claude` parser
-  first (see Status).
+- The split calculation as in The split.
+- **On the canned parser, in development and production** (decided 2026-10-29), like phase 5: the canned receipts
+  are all there is to test with. The real dinner test comes when production parses with Claude again (see Status).
 
 **Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
 broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
@@ -828,7 +777,13 @@ phone when planned).
 
 **Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
-**Phase 9 - Phone polish.** Layout at 375 px, tap targets, empty states.
+**Phase 9 - Phone polish and settings.** Layout at 375 px, tap targets, empty states. And a settings page for the
+owner (added 2026-10-29):
+- **The four names**, changed in the app instead of in `application.properties` (see Purpose).
+- **A switch between the `canned` and `claude` parsers**, replacing the property's edit and redeploy (see Status).
+  Both parsers then exist at once, where today `pbs.receipt-parser` creates only one.
+- *To decide when planned:* where the settings live. There is no database, and settings lost on every restart
+  would bring the property's value back each time.
 
 ### Operations
 
