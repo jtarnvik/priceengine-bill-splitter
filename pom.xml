@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.tarnvik</groupId>
     <artifactId>pbs</artifactId>
-    <version>0.6.5</version>
+    <version>0.6.6</version>
     <name>pbs</name>
     <description>Bill splitter: Claude reads the receipt, friends watch their totals live</description>
     <properties>
