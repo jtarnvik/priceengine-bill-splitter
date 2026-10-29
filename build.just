@@ -7,7 +7,7 @@
 # build.just is committed on purpose: the deploy machine checks out a tag and runs `just build`
 # immediately, so the jar name for that exact version has to be present in the tag.
 
-jar_version := "0.4.5"
+jar_version := "0.4.6"
 jar_name := "pbs-" + jar_version + ".jar"
 
 # Clean, build and assemble release/
