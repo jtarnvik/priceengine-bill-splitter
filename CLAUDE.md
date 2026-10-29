@@ -50,11 +50,11 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 not planned yet.** pbs `v0.6.0` runs on the Mini at
-`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
-log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
-they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
-shows each person's total and items.
+**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 planned (2026-10-29), not started.** pbs
+`v0.6.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
+log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows,
+with a warning when they do not add up to the total; the owner ticks who had what; every open page follows live,
+and the public page shows each person's total and items.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -512,6 +512,15 @@ for"): only the owner writes, but two quick taps on different rows are two concu
 one could overwrite the other's tick, or the older state be broadcast last. Readers need no locking: an immutable
 snapshot can be serialised for every listener as it is.
 
+**Done** (phase 7, decided 2026-10-29) is part of the state: set as a whole state, never toggled
+(`PUT /api/protected/receipt/done` with `{"receiptId", "done": true|false}`), allowed only once everything is
+assigned, and while it holds, ticks are refused with 409 — the amounts in the Swish buttons must not change under a
+friend who is paying; to change something, the owner undoes first.
+
+**The receipt expires 30 minutes after the last change** — upload, tick, "Klar", undo — and is reset as by
+"Återställ", number and all (`pbs.receipt-expiry=30m`, checked every minute; decided 2026-10-29). *Why from the last
+change:* a long split is never cut off while the owner is working on it, and nothing is left behind afterwards.
+
 ## Live updates — Server-Sent Events
 
 Friends' pages are read-only and data only flows from the server to the phones, so **SSE, not WebSockets**.
@@ -535,7 +544,9 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
   every item id with its people; all four people in the configured order, each with their items and shares,
   discount share and rounded total; and the unassigned bucket's discount share and total. **The names travel in
   it** (decided 2026-10-29, replacing a `/api/public/participants` endpoint): the labels arrive with the state
-  they belong to, there is one fetch fewer, and a rename in phase 9 reaches every phone live.
+  they belong to, there is one fetch fewer, and a rename in phase 9 reaches every phone live. From phase 7 it
+  also carries `done`, and `payment` — the payee's name, the Swish number and the message — **only while done**
+  (decided 2026-10-29): the number then has no endpoint of its own that could be asked at any time.
 - **The animation keys on a *new `receiptId`*, not on the `receipt` event arriving.** State-on-connect sends the
   `receipt` event again on every reconnect, and a phone that wakes from its lock screen must not replay the
   greeting for a receipt it has already shown. The last greeted id is kept in `sessionStorage` (`use-greeting.ts`),
@@ -636,7 +647,11 @@ stack, so its files are the reference (see Reference implementations).
   name settings could make wrong); the items left to split with "Kvar att
   dela på"; one section per person with their items. *Why:* the number each friend wants first, the list being
   worked through next, the detail for checking last.
-- From phase 7, a Swish button per person once the owner marks the split done.
+- **When the split is done, the totals card becomes the payment card** (phase 7, decided 2026-10-29, *to be tried
+  at the table*): one row per person with the total and a Swish button, the payee's row saying "Får betalt"
+  instead. The payee is `pbs.payee`, one of the participants. The link is built in the browser, each parameter with
+  `encodeURIComponent` — not `URLSearchParams`, which writes a space as `+`. The message, built on the server, is
+  "<restaurant> <date of the upload>", characters outside Swish's set dropped, cut to 50.
 - An empty state ("Inget kvitto ännu") for before the first upload and after a reset or restart.
 - **No connection status, except a quiet "Återansluter …"** once the stream has been down for 2 s. *Why 2 s:* the
   quick reconnect after a phone is unlocked never flashes it, and a page that is really cut off says so before
@@ -649,7 +664,8 @@ keeps it.
   browser, before upload). While the parse runs it says "Läser kvittot…" and cannot be tapped; a failure shows a
   message in Swedish and the button again.
 - **With a receipt:** the restaurant, the rows, and a footer — "Totalt" and, from phase 6, "Kvar att dela på",
-  which falls as items are ticked. Then "Återställ", asking first in a `<dialog>` styled like the app. *Not
+  which falls as items are ticked. Then (phase 7) "Klar", enabled once nothing is left, and while done "Ångra klar"
+  with the boxes disabled. Then "Återställ", asking first in a `<dialog>` styled like the app. *Not
   `window.confirm`:* it puts "pbs.tarnvik.com säger…" above the question.
 - **A row is two lines**: the name and the price; under it (phase 6) four checkboxes, each labelled with a
   person's first name — the label is the tap target, larger than the checkbox. Quantity and unit price ("3 ×
@@ -700,6 +716,7 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 | POST | `/api/protected/receipt` | Owner | Multipart image → parse → replaces the state, broadcasts it, answers it |
 | DELETE | `/api/protected/receipt` | Owner | Reset: no receipt, broadcast to every phone |
 | PUT | `/api/protected/items/{id}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
+| PUT | `/api/protected/receipt/done` | Owner | Done or not, as a whole state (phase 7); 409 if stale or something is left |
 | POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
 Corrections (edit a row, add a row, remove a row) arrive with phase 8.
@@ -784,23 +801,97 @@ history.
 
 **Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
 broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
-link opening the Swish app:
-`https://app.swish.nu/1/p/sw/?sw=<number>&amt=<amount>&msg=<message>` (as the owner found it documented; verify on a
-phone when planned).
+link opening the Swish app: `https://app.swish.nu/1/p/sw/?sw=<number>&amt=<amount>&msg=<message>`. Swish's
+developer guide confirms the base and `sw` as the receiver, with optional amount and message and a way to let the
+payer edit them; the exact parameters are checked on a phone in 7.4.
 - **Amount:** the person's rounded total. **Message:** the restaurant and the date, cut to Swish's 50 characters,
   URL-encoded (åäö, spaces).
 - **`edit=amt`**, so that a friend can change the amount in the app. Swish locks a prefilled amount otherwise, and
   the design lets the friends round up as they see fit.
 - **"Klar" can be undone**, hiding the buttons again, for a mistake spotted at the table. Reset clears everything.
-- **The owner's phone number — recommended: include it**, but from the environment (`PBS_SWISH_NUMBER` in
-  `pbs.env`), never from a tracked file: the repository is public, and a phone number identifies the owner far
-  beyond a first name. The backend sends it only in the done state and drops it on reset or undo. *Why include it:*
-  without a recipient each friend has to find the owner in Swish themselves, and paying the wrong person is the
-  likelier mishap. The exposure is small — the page is public but its address is not advertised, the number is
-  shown for minutes, and the friends already have it. Not logged. *Fallback if the owner decides against it:* a
-  link without `sw`, if Swish then asks for the recipient — to be tried on a phone.
+- **The owner's phone number is included** (decided 2026-10-29), as a secret like the others: `PBS_SWISH_NUMBER` in
+  `deployment/pbs.env` on the Mini and in `local-secrets.properties` in development, both gitignored, never in a
+  tracked file — the repository is public, and a phone number identifies the owner far beyond a first name. Not
+  logged. It is sent only while the split is done, to every page that is open or opens in that time, and dropped
+  on undo, reset or expiry. *Why include it:* without a recipient each friend has to find the owner in Swish
+  themselves, and paying the wrong person is the likelier mishap. *The address is not secret:* this repository
+  names `pbs.tarnvik.com`, so what bounds the exposure is time, not obscurity.
+- **The receipt expires after 30 minutes** (decided 2026-10-29): it is reset automatically, number and all. *Why:*
+  a forgotten reset would otherwise leave the number on a public page until the next restart, possibly for weeks.
+  A friend who wants to keep the sums takes a screenshot.
 - The Swish logo from Swish's marketing toolbox (`https://www.swish.nu/marketing-toolbox/logotype#primary`),
   used as its guidelines say.
+
+#### Phase 7 — step by step
+
+Planned 2026-10-29 by Claude from the design above and the owner's two decisions (the number, the expiry); its
+eight decisions, S1–S8, were accepted by the owner the same day, S1, S2 and S6 to be tried at the table, and are now
+in the design: S1 the expiry from the last change and S2 "Klar" only when everything is assigned, ticks locked
+while done (State); S3 done as a whole state (State, API); S4 done and the payment in the `split` event (Live
+updates); S5 the payee configured, S6 the payment card, S7 the message on the server and the link in the browser
+(The two pages); S8 the number as written, its form checked on a phone in 7.4.
+
+**7.1 The number and the logo** — owner, Claude walking through
+- `PBS_SWISH_NUMBER=…` into `local-secrets.properties` and as `export PBS_SWISH_NUMBER=…` into `deployment/pbs.env` on
+  the Mini, **before** 7.2's code runs anywhere: startup fails without it. Claude adds the empty name to both
+  `.example` files and the Environment variables table.
+- The Swish logo from the marketing toolbox, the variant its guidelines prescribe for a button on a light
+  background, saved as SVG in `frontend/src/assets/`. It is Swish's public brand asset and may be committed.
+
+Verify:
+1. `grep -c '^PBS_SWISH_NUMBER=.' local-secrets.properties` on the dev machine and
+   `grep -c '^export PBS_SWISH_NUMBER=.' deployment/pbs.env` on the Mini → `1` each.
+2. `git status` shows neither file; `git check-ignore` names both.
+3. The logo file is in `frontend/src/assets/`.
+
+**7.2 Done, payment and expiry — backend** — Claude
+- `pbs.payee`, `pbs.swish-number=${PBS_SWISH_NUMBER}`, `pbs.receipt-expiry=30m`; the test profile gets a made-up
+  number. The state gains `done` and the time of the last change (from a `Clock` bean, so tests can move time).
+- `PUT /api/protected/receipt/done` (S3); ticks refused while done (S2). The `split` event gains `done` and
+  `payment` (S4, S7). An upload starts not done.
+- `ReceiptExpiryJob` in `port.incoming.scheduled`: every minute, a receipt untouched for `pbs.receipt-expiry` is
+  reset and broadcast, and the log says `Receipt expired` — without the number.
+- Tests: done and undone, with the payment present only while done; `done: true` with something left → 409; a tick
+  while done → 409; a stale `receiptId` → 409; the message's characters and length; expiry after the idle time and
+  not before, any change restarting it; an anonymous `PUT …/done` → 401; startup failing without the number or with
+  a payee not among the participants.
+
+Verify, on the dev machine, the backend in `local` (`canned`):
+1. `mvn verify` → `BUILD SUCCESS`.
+2. Logged in through Vite, the cookie copied from DevTools: with every item assigned, `PUT …/receipt/done` with
+   `"done": true` → `204`, and the stream shows a `split` event with `"done":true` and the payment; with `false`,
+   the payment is gone from the next event.
+3. With an item left, `"done": true` → `409`; a tick while done → `409`.
+4. Started with `-Dpbs.receipt-expiry=2m`: two to three minutes after the last change, the stream shows
+   `{"receipt":null}` and the log `Receipt expired`.
+5. `grep -c` for the number in the log → `0`.
+
+**7.3 "Klar" and the Swish buttons — frontend** — Claude
+- The client regenerated. The owner's page: "Klar" under the footer, enabled when nothing is left; while done,
+  "Ångra klar" instead and the boxes disabled.
+- The public page while done: the payment card (S6), the Swish link built from the event (S7, `edit=amt`,
+  `cur=SEK`), the button with the logo as its guidelines say.
+- The `split` type in `types/live.ts` gains `done` and `payment`.
+
+Verify, with the backend in `local` (`canned`) and `npm run dev`, an owner tab and a public tab at 375 px:
+1. "Klar" is disabled until "Kvar att dela på" is `0,00 kr`. Pressed, the public tab shows the payment card at
+   once: a Swish button for every person but Jesper, whose row says "Får betalt".
+2. The owner's boxes are disabled while done; "Ångra klar" brings them back and removes the buttons on both tabs.
+3. A button's link carries the number, the person's total, `edit=amt` and the message, encoded (DevTools).
+
+**7.4 Release `v0.7.0` and the Swish test** — owner, with Claude preparing
+- `./change-version.sh 0.7.0`, push the commit and the tag, Ctrl-C and `just doit` on the Mini. Production stays on
+  `canned`.
+
+Verify:
+1. The startup log says `Starting PbsApplication v0.7.0`.
+2. **On a phone, with a friend's phone if one is at hand:** a split marked done; tapping a Swish button opens the
+   Swish app with the owner as recipient, the amount filled in and changeable, and the message readable, åäö
+   included. Stop there — or send 1 kr to see it arrive.
+3. If Swish rejects the number's form, `PBS_SWISH_NUMBER` is changed on the Mini and pbs restarted; the form that
+   works is noted here.
+4. Thirty-one minutes after the last change, both phones show "Inget kvitto ännu".
+5. `curl -si -X PUT https://pbs.tarnvik.com/api/protected/receipt/done` → 401.
 
 **Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
