@@ -50,12 +50,12 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 in progress (planned 2026-10-29).** pbs `v0.5.3` runs on
+**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 in progress (planned 2026-10-29).** pbs `v0.6.0` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; every open page gets the receipt live, and the public page greets a new one row by
 row. The owner ticks who had what, and the public page shows each person's total and items (steps 6.1 to 6.3,
-verified on a phone); `v0.5.3` greys a ticked row a little more.
+verified on a phone), released as `v0.6.0`.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost, and stays on it
@@ -865,7 +865,8 @@ phone when planned).
 
 **Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
-**Phase 9 - Phone polish and settings.** Layout at 375 px, tap targets, empty states. And a settings page for the
+**Phase 9 - Phone polish and settings.** Layout at 375 px, tap targets, empty states, and the small adjustments the
+owner collects while using it — among them how much a ticked row greys (lightened once in `v0.5.3`, not yet judged). And a settings page for the
 owner (added 2026-10-29):
 - **The four names**, changed in the app instead of in `application.properties` (see Purpose).
 - **A switch between the `canned` and `claude` parsers**, replacing the property's edit and redeploy (see Status).
