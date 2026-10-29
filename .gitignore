@@ -47,6 +47,8 @@ deployment/*.env
 # src/test/resources/recordings are not ignored.
 /recordings/
 /deployment/recordings/
+# Photos of real receipts, kept for trying the parser. Same reason as the recordings: never committed.
+/receipts/
 pom.xml.versionsBackup
 
 # Frontend (Node and npm are downloaded into frontend/node by frontend-maven-plugin)
