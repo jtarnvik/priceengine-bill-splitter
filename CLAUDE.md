@@ -50,11 +50,11 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 not planned yet.** pbs `v0.5.0` runs on the Mini at
-`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
-log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
-they do not add up to the total; every open page gets the receipt live, and the public page greets a new one row by
-row.
+**Phases 1 to 5 done (2026-10-25 to 2026-10-29); phase 6 planned (2026-10-29), not started.** pbs
+`v0.5.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its
+log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows,
+with a warning when they do not add up to the total; every open page gets the receipt live, and the public page
+greets a new one row by row.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost, and stays on it
@@ -90,8 +90,8 @@ recordings of parses (see Recording and canned responses).
 - **No database.** All state is in memory and lost on restart, which is accepted: a split lives for one dinner.
 - **One receipt at a time.** Uploading a new one replaces the old.
 - **The four people are hardcoded**, first names only, in `application.properties`: Jesper, Anders, Anna and
-  Kia. The owner will change them in the app (phase 9). The browser therefore fetches them from the backend
-  (phase 6) rather than having them built in.
+  Kia. The owner will change them in the app (phase 9). The browser therefore gets them from the backend (in the
+  `split` event) rather than having them built in.
 - **The repository is public.** Nothing in it may identify the owner beyond what a first name does: the allowed
   Google email, the client secret and the Anthropic key all come from the environment.
 
@@ -464,9 +464,12 @@ The owner's page is a list: one row per item, four checkboxes per row, one per p
   tick is unassigned.
 - **Exact while computing, rounded once at the end.** Each person's shares are kept exact and summed; only the
   person's total is rounded, to whole kronor. *Why not round per item:* the errors accumulate across a long
-  receipt. Rounding once per person bounds the drift to ±2 kr (four people, at most 50 öre each). Exactness:
-  `BigDecimal` with a few decimals per share is plenty. A fun alternative: since an item is divided by 1–4,
-  every share is an exact integer in units of 1/12 öre.
+  receipt. Rounding once per person bounds the drift to ±2 kr (four people, at most 50 öre each). Exact in between
+  with `BigDecimal`; a person's total rounds half up and shows as `342 kr`, without öre, so that it reads as
+  rounded; shares, discount shares and "Kvar att dela på" round to the öre (decided 2026-10-29). *Why not the
+  1/12-öre integers* that dividing by 1–4 would allow: discounts spread in proportion break them.
+- **The split is of the lines** — items plus adjustments, `linesTotal` — not of the printed total (decided
+  2026-10-29). When the two differ, the sum warning is already showing, and the lines are what can be ticked.
 - **Show the drift instead of hiding it.** The public page shows the receipt total next to the sum of the four
   rounded totals. The friends round up as they see fit when paying.
 - **Discounts are spread in proportion to each person's subtotal.** Unassigned items count as a fifth bucket
@@ -490,9 +493,11 @@ tab could apply ticks meant for the previous receipt to the new one by item id.
 The whole split is one immutable record — receipt id, items with their assignees, totals — in an
 `AtomicReference`, empty when there is no receipt. Every change builds a new record, swaps it in and broadcasts it.
 **Reset empties it on the server** (`DELETE /api/protected/receipt`), for every phone, not only on the owner's
-screen: a reset only in the browser would be undone by the next reconnect's state-on-connect. Only the owner writes, so
-there is no contention to design for, and an immutable snapshot can be serialised for every listener with no
-locking.
+screen: a reset only in the browser would be undone by the next reconnect's state-on-connect. **Writes are
+serialised** (`synchronized` around change and broadcast; decided 2026-10-29, replacing "no contention to design
+for"): only the owner writes, but two quick taps on different rows are two concurrent requests, and unserialised
+one could overwrite the other's tick, or the older state be broadcast last. Readers need no locking: an immutable
+snapshot can be serialised for every listener as it is.
 
 ## Live updates — Server-Sent Events
 
@@ -510,8 +515,12 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
   upload and reset. The public page greets a new one by showing its rows one by one (phase 5). A new `receiptId`
   clears the split held in the browser.
 - **`split`** — who had what changed: the assignments and the totals that follow from them. Sent on every tick of
-  a checkbox, and on corrections (phase 8). It carries the `receiptId`, so a phone that somehow holds an older
-  receipt ignores it rather than applying ticks to the wrong rows.
+  a checkbox, after an upload (everything unassigned), and on corrections (phase 8). It carries the `receiptId`,
+  so a phone that somehow holds an older receipt ignores it rather than applying ticks to the wrong rows. It holds
+  every item id with its people; all four people in the configured order, each with their items and shares,
+  discount share and rounded total; and the unassigned bucket's discount share and total. **The names travel in
+  it** (decided 2026-10-29, replacing a `/api/public/participants` endpoint): the labels arrive with the state
+  they belong to, there is one fetch fewer, and a rename in phase 9 reaches every phone live.
 - **The animation keys on a *new `receiptId`*, not on the `receipt` event arriving.** State-on-connect sends the
   `receipt` event again on every reconnect, and a phone that wakes from its lock screen must not replay the
   greeting for a receipt it has already shown. The last greeted id is kept in `sessionStorage` (`use-greeting.ts`),
@@ -558,8 +567,9 @@ stack, so its files are the reference (see Reference implementations).
   each named event has its own listener writing its own part. The `visibilitychange` reopen lives in the
   same function. The `EventSource` is plain browser API; it does not go through axios.
 - **Mutations need no tag invalidation** for the split state: the server broadcasts the new state after every
-  write, and the stream updates the cache. Optimistic updates with `updateQueryData` are an option for the
-  checkboxes, so a tick shows at once over a poor connection.
+  write, and the stream updates the cache. **The checkboxes update optimistically** (`updateQueryData`; decided
+  2026-10-29): a tick shows at once over a poor connection, the `split` event confirms or corrects it, and a failed
+  request undoes it with a short message.
 - **axios via a custom `axiosBaseQuery`**, RTK Query's documented pattern for replacing `fetchBaseQuery`, copied
   from overlord.
 - **DTOs are TypeScript `interface`s/`type`s, never classes.** The store and the RTK Query cache expect plain,
@@ -599,9 +609,13 @@ stack, so its files are the reference (see Reference implementations).
   so at the table, which is how mistakes are meant to be caught.
 - Each person's rounded total, updated with every tick, and the receipt total next to the sum of the rounded
   totals — so the arithmetic is visible and shows how far the owner has got.
-- *To decide in phase 6:* whether an assigned item reappears under each person it was assigned to. The first
-  design wanted each person's items, not only their total, so that friends can catch the owner's mistakes — a
-  total alone says something is wrong without saying what. At the table that can also be said aloud.
+- **An assigned item reappears under each person it was assigned to**, with that person's share, and one line
+  for their share of discounts and rounding (decided 2026-10-29). *Why:* a total alone says something is wrong
+  without saying what, and friends should be able to catch the owner's mistakes.
+- **Top to bottom** (decided 2026-10-29, *to be tried at the table*): the restaurant; the four totals in a 2 × 2
+  grid with the drift line under it ("Kvittot 3 574 kr · De fyra 3 575 kr"); the items left to split with "Kvar att
+  dela på"; one section per person with their items. *Why:* the number each friend wants first, the list being
+  worked through next, the detail for checking last.
 - From phase 7, a Swish button per person once the owner marks the split done.
 - An empty state ("Inget kvitto ännu") for before the first upload and after a reset or restart.
 - **No connection status, except a quiet "Återansluter …"** once the stream has been down for 2 s. *Why 2 s:* the
@@ -664,7 +678,6 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 | GET | `/api/public/events` | Public | SSE stream; current state on connect, then on every change |
 | POST | `/api/protected/receipt` | Owner | Multipart image → parse → replaces the state, broadcasts it, answers it |
 | DELETE | `/api/protected/receipt` | Owner | Reset: no receipt, broadcast to every phone |
-| GET | `/api/public/participants` | Public | The four first names (phase 6) |
 | PUT | `/api/protected/items/{id}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
 | POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
@@ -737,8 +750,7 @@ with production on the canned parser throughout. What it established is now in A
 The two pages; the worked step plan is in git history.
 
 **Phase 6 - Split and broadcast.** The owner assigns items; every reader follows.
-- **The owner's page:** the checkbox line on every row, one box per person, labelled with the first name; the
-  names from `GET /api/public/participants`, fetched on page load (configured in `application.properties`); ticked
+- **The owner's page:** the checkbox line on every row, one box per person, labelled with the first name; ticked
   rows greyed; "Kvar att dela på" in the footer.
 - **Every tick is sent at once and every change broadcast whole** — the owner's idea and the existing design
   agree. The request sets the row's full set of people (`PUT …/items/{id}/assignees`, see The assignment
@@ -750,10 +762,82 @@ The two pages; the worked step plan is in git history.
   always shows what the server holds, and a wrong box is seen and tapped again — at a table where it can be
   discussed anyway.
 - **The public page:** an assigned item leaves the list of items; each person's total and "Kvar att dela på"
-  update continuously. Whether assigned items reappear under each person: see The two pages.
+  update continuously.
 - The split calculation as in The split.
 - **On the canned parser, in development and production** (decided 2026-10-29), like phase 5: the canned receipts
   are all there is to test with. The real dinner test comes when production parses with Claude again (see Status).
+
+#### Phase 6 — step by step
+
+Planned 2026-10-29 by Claude from the design above; its seven decisions, P1–P7, were accepted by the owner the same
+day and are now in the design: P1 the names in the `split` event (Live updates), P2 each person's items and P3 the
+public page's order, to be tried at the table (The two pages), P4 optimistic ticks (Frontend data layer), P5
+serialised writes (State), P6 rounding and P7 splitting the lines (The split).
+
+**6.1 Split, assignment and the `split` event — backend** — Claude
+- `pbs.participants` in `application.properties`. The state becomes the receipt plus each item's set of people
+  (empty when unassigned), one immutable record; an upload starts with every item unassigned, a reset empties it.
+- `SplitCalculator`, pure and unit-tested: each item divided evenly between its people; adjustments spread in
+  proportion to each bucket's item subtotal, the unassigned items being a fifth bucket; rounding as in P6.
+- `PUT /api/protected/items/{id}/assignees` with `{"receiptId", "people"}` (`AssigneesRequest`, Bean Validation),
+  answering 204. 409 when the `receiptId` is not the current one (or there is no receipt), 404 for an unknown
+  item, 400 for a name not among the participants. Change and broadcast serialised (P5).
+- The `split` event — `receiptId`; `items`, every item id with its people; `people`, each with name, items with
+  their share, discount share and rounded total; `unassigned`, discount share and total. Sent after every
+  assignment, after an upload (all unassigned), and on connect after the `receipt` event when there is a receipt,
+  both from one snapshot of the state.
+- Tests: the calculator (even and uneven division, a three-way share of an amount that does not divide, discounts
+  spread in proportion, the five buckets adding up exactly to the lines, rounding per person, nothing assigned);
+  the service (set, replace and clear a row's people, 409, 404, 400, an upload clearing the assignments, a
+  broadcast after each change); an anonymous `PUT` gets 401; on connect `receipt` then `split`.
+
+Verify, on the dev machine, the backend in `local` (`canned`):
+1. `mvn verify` → `BUILD SUCCESS`.
+2. With a receipt uploaded, `curl -sN localhost:8082/api/public/events` shows `event:receipt`, then `event:split`
+   with every item unassigned and four people at 0.
+3. Logged in through Vite, the cookie copied from DevTools, a `PUT` with the current `receiptId` and
+   `["Anna","Kia"]` → `204`, and the stream shows a `split` event with the item under both and their shares.
+4. The same with an old `receiptId` → `409`; an unknown item → `404`; `["Bertil"]` → `400`; no cookie → `401`.
+
+**6.2 Ticking on the owner's page — frontend** — Claude
+- The API client regenerated. The stream's cache entry gains a `split` part, written by the `split` listener, the
+  `split` type hand-written in `types/live.ts`; a new `receiptId` clears it, and a `split` for another receipt is
+  ignored.
+- Under every item the checkbox line, `grid-cols-4`, each box labelled with a name from the event, the label the tap
+  target. A tick sends the row's whole new set of people, optimistically (P4). A row with anyone ticked greys its
+  name and price, not its boxes. Adjustments get no boxes: they are spread, not assigned.
+- The footer: "Totalt" and "Kvar att dela på".
+
+Verify, with the backend in `local` (`canned`) and `npm run dev`, logged in, in a 375 px device view:
+1. Every item has four labelled boxes; adjustments have none. Tapping a name ticks its box at once.
+2. A ticked row's name and price grey; its boxes do not.
+3. "Kvar att dela på" falls with every tick and reaches `0,00 kr` when every item has someone.
+4. A reload keeps every tick. Rapid taps across several rows all stick.
+5. With the backend stopped, a tap is undone and a short message says it was not saved.
+
+**6.3 The split on the public page — frontend** — Claude
+- As in P2 and P3: the four totals with the drift line, the items not yet assigned with "Kvar att dela på" — an
+  assigned item leaves the list — and each person's items with their shares. When everything is assigned, the
+  list says so instead of showing nothing.
+- The greeting still plays for a new receipt, for the rows present when it arrives.
+
+Verify, an owner tab and a public tab as in 6.2:
+1. Ticks in the owner tab move items out of the public tab's list and under the people ticked, each with its share,
+   and change the totals, at once.
+2. A row shared by three shows a third under each, and the three thirds make the price to the öre.
+3. With every item assigned, the four totals' sum differs from the receipt's total by at most 2 kr, and the drift
+   line shows both. Bistro Exempel's discount appears as a share under each person.
+4. A new upload clears every tick in both tabs.
+
+**6.4 Release `v0.6.0` and the production test** — owner, with Claude preparing
+- `./change-version.sh 0.6.0`, push the commit and the tag, Ctrl-C and `just doit` on the Mini. Production stays on
+  `canned`.
+
+Verify:
+1. The startup log says `Starting PbsApplication v0.6.0`.
+2. **On two phones:** ticks on the owner's phone show on the public phone at once, totals included.
+3. Lock the public phone, tick on the owner's, unlock: the public phone shows the ticks made meanwhile.
+4. `curl -si -X PUT https://pbs.tarnvik.com/api/protected/items/1/assignees` → 401.
 
 **Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
 broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
