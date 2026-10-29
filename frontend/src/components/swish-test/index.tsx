@@ -1,12 +1,14 @@
 // TEMPORARY (2026-10-29): every form of Swish link we can think of, each with its own button, to find the one an
 // iPhone accepts. Goes once swishPaymentLink in util/swish.ts uses the form that works.
 //
-// Round 1: only `…/1/p/sw` and `swish://` opened Swish without "felaktigt format"; `…/1/p/sw/`, with the slash that
-// Swish's own example has, failed even bare, and every variant with a number had that slash. app.swish.nu hands
-// every path to the app, so the app itself is refusing. Round 2: the same variants without the slash.
+// Round 1: only `…/1/p/sw` and `swish://` opened Swish without "felaktigt format"; `…/1/p/sw/` failed even bare.
+// Round 2: without the slash every link opened Swish, but nothing was filled in: the app reads the parameters only
+// with the slash, and refused ours. Round 3: with the slash, in the form a tester reports working on a phone
+// (https://gist.github.com/Armandur/ead542b56cca2696b4286dbc05740da8, measured 2026-09-10):
+// `?sw=…&amt=100&cur=SEK&msg=…&src=qr` — with `src=qr`, which we never sent, and `cur`. Then one change at a time.
 import { Payment } from '../../types/live';
 
-const BASE = 'https://app.swish.nu/1/p/sw';
+const BASE = 'https://app.swish.nu/1/p/sw/';
 const AMOUNT = '1.00';
 
 type Variant = {
@@ -26,56 +28,62 @@ function query(parameters: [string, string][]): string {
   return parameters.map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('&');
 }
 
-/** The old swish:// scheme with its JSON payload, in case the app still takes it. */
-function legacyScheme(payee: string, message: string): string {
-  const data = {
-    version: 1,
-    payee: { value: payee },
-    amount: { value: 1, editable: true },
-    message: { value: message, editable: true },
-  };
+/** The swish:// scheme with its JSON payload, as the tester's example: no `editable` anywhere. */
+function jsonScheme(payee: string, amount: number | string, message: string): string {
+  const data = { version: 1, payee: { value: payee }, amount: { value: amount }, message: { value: message } };
   return `swish://payment?data=${encodeURIComponent(JSON.stringify(data))}`;
 }
 
 function variants(payment: Payment): Variant[] {
   const { international, national, plus } = numberForms(payment.swishNumber);
   const message = payment.message;
+  const link = (parameters: [string, string][]) => `${BASE}?${query(parameters)}`;
   return [
-    { label: '1. Bara Swish-länken, utan snedstreck (fungerade i omgång 1)', url: BASE },
-    { label: '2. Bara Swish-länken, med snedstreck (fel i omgång 1)', url: `${BASE}/` },
-    { label: '3. Nummer 46…', url: `${BASE}?${query([['sw', international]])}` },
-    { label: '4. Nummer 0…', url: `${BASE}?${query([['sw', national]])}` },
-    { label: '5. Nummer +46…', url: `${BASE}?${query([['sw', plus]])}` },
-    { label: '6. 46… + belopp 1.00', url: `${BASE}?${query([['sw', international], ['amt', AMOUNT]])}` },
-    { label: '7. 46… + belopp 1 (heltal)', url: `${BASE}?${query([['sw', international], ['amt', '1']])}` },
-    { label: '8. 0… + belopp 1.00', url: `${BASE}?${query([['sw', national], ['amt', AMOUNT]])}` },
     {
-      label: '9. 46… + belopp + meddelande "Test"',
-      url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', 'Test']])}`,
+      label: '1. Testarens form exakt: 46… + amt=1 + cur=SEK + msg=Test + src=qr',
+      url: link([['sw', international], ['amt', '1'], ['cur', 'SEK'], ['msg', 'Test'], ['src', 'qr']]),
     },
     {
-      label: '10. 46… + belopp + riktigt meddelande',
-      url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', message]])}`,
+      label: '2. Som 1, med 0…',
+      url: link([['sw', national], ['amt', '1'], ['cur', 'SEK'], ['msg', 'Test'], ['src', 'qr']]),
     },
     {
-      label: '11. 46… + belopp + "Test" + edit=amt',
-      url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', 'Test'], ['edit', 'amt']])}`,
+      label: '3. Som 1, med +46…',
+      url: link([['sw', plus], ['amt', '1'], ['cur', 'SEK'], ['msg', 'Test'], ['src', 'qr']]),
+    },
+    { label: '4. Bara nummer 46… + src=qr', url: link([['sw', international], ['src', 'qr']]) },
+    { label: '5. Bara nummer 0… + src=qr', url: link([['sw', national], ['src', 'qr']]) },
+    {
+      label: '6. Som 1 utan cur',
+      url: link([['sw', international], ['amt', '1'], ['msg', 'Test'], ['src', 'qr']]),
     },
     {
-      label: '12. 46… + belopp + "Test" + edit=amt,msg',
-      url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', 'Test'], ['edit', 'amt,msg']])}`,
+      label: '7. Som 1 utan src',
+      url: link([['sw', international], ['amt', '1'], ['cur', 'SEK'], ['msg', 'Test']]),
     },
     {
-      label: '13. Hela betalningen: 46… + belopp + riktigt meddelande + edit=amt',
-      url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', message], ['edit', 'amt']])}`,
+      label: '8. Som 1 med belopp 1.00',
+      url: link([['sw', international], ['amt', AMOUNT], ['cur', 'SEK'], ['msg', 'Test'], ['src', 'qr']]),
     },
     {
-      label: '14. Som 13, med 0…',
-      url: `${BASE}?${query([['sw', national], ['amt', AMOUNT], ['msg', message], ['edit', 'amt']])}`,
+      label: '9. Som 1 med riktigt meddelande',
+      url: link([['sw', international], ['amt', '1'], ['cur', 'SEK'], ['msg', message], ['src', 'qr']]),
     },
-    { label: '15. swish://, bara appen', url: 'swish://' },
-    { label: '16. swish://payment med JSON, 46…', url: legacyScheme(international, 'Test') },
-    { label: '17. swish://payment med JSON, 0…', url: legacyScheme(national, 'Test') },
+    {
+      label: '10. Som 1 + edit=amt',
+      url: link([['sw', international], ['amt', '1'], ['cur', 'SEK'], ['msg', 'Test'], ['edit', 'amt'], ['src', 'qr']]),
+    },
+    {
+      label: '11. Som 10 med 0…',
+      url: link([['sw', national], ['amt', '1'], ['cur', 'SEK'], ['msg', 'Test'], ['edit', 'amt'], ['src', 'qr']]),
+    },
+    {
+      label: '12. Hela betalningen: 46… + 1.00 + cur + riktigt meddelande + edit=amt + src=qr',
+      url: link([['sw', international], ['amt', AMOUNT], ['cur', 'SEK'], ['msg', message], ['edit', 'amt'], ['src', 'qr']]),
+    },
+    { label: '13. swish://payment, testarens JSON, 46…', url: jsonScheme(international, 1, 'Test') },
+    { label: '14. swish://payment, testarens JSON, 0…', url: jsonScheme(national, 1, 'Test') },
+    { label: '15. swish://payment, JSON, 0…, belopp "1.00"', url: jsonScheme(national, AMOUNT, 'Test') },
   ];
 }
 
@@ -83,7 +91,7 @@ function variants(payment: Payment): Variant[] {
 export function SwishTestPanel({ payment }: { payment: Payment }) {
   return (
     <section className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-gray-800">
-      <h2 className="font-medium">Swish-test, omgång 2: utan snedstreck (tillfälligt)</h2>
+      <h2 className="font-medium">Swish-test, omgång 3: med snedstreck och src=qr (tillfälligt)</h2>
       <p className="pb-2 text-sm text-gray-600">Varje variant öppnar Swish på sitt sätt. Belopp 1 kr. Avbryt i appen.</p>
       <ul className="flex flex-col gap-3">
         {variants(payment).map((variant) => (

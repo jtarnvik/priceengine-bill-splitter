@@ -50,7 +50,7 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.4` runs on
+**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.5` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
@@ -58,8 +58,9 @@ shows each person's total and items. Steps 7.2 and 7.3 are verified on a phone â
 receipt expiring 30 minutes after its last change â€” **except the Swish link, which the Swish app still refuses** with
 "felaktigt format". A **temporary** test panel on the owner's page, shown while done (`components/swish-test`,
 marked `TEMPORARY`), offers every link form to try; round 1 (`v0.6.3`) found that only links without a trailing
-slash open the app, round 2 (`v0.6.4`) tries the payment links without it. The panel goes once the working form is
-in `util/swish.ts`.
+slash open the app, round 2 (`v0.6.4`) that without it the app ignores every parameter, round 3 (`v0.6.5`) tries
+the slash with `src=qr`, the form a tester reports working. The panel goes once the working form is in
+`util/swish.ts`.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
