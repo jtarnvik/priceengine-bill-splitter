@@ -50,7 +50,7 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 not planned yet.** pbs `v0.4.1` runs on the Mini at
+**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 planned (2026-10-29), not started.** pbs `v0.4.1` runs on the Mini at
 `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
 log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; every open page gets the receipt live, the public page so far only its restaurant
@@ -581,6 +581,8 @@ stack, so its files are the reference (see Reference implementations).
 - **The restaurant as a heading, then the items not yet assigned**, in receipt order, and a last row "Kvar att
   dela på" (phase 5). An item leaves the list when the owner assigns it (phase 6), so the list shrinks to nothing
   as the split is done.
+- **The sum warning too**, as on the owner's page (decided 2026-10-29): a friend can spot the misread line and say
+  so at the table, which is how mistakes are meant to be caught.
 - Each person's rounded total, updated with every tick, and the receipt total next to the sum of the rounded
   totals — so the arithmetic is visible and shows how far the owner has got.
 - *To decide in phase 6:* whether an assigned item reappears under each person it was assigned to. The first
@@ -712,12 +714,69 @@ Deployment; the worked step plan is in git history.
 and to a reader arriving later as its first event on connect, so no separate fetch is needed: a phone that comes
 online after the parse gets the receipt the moment it connects. This phase gives the public page its real content:
 - The restaurant as a heading, the items in receipt order, and a last row "Kvar att dela på" — the receipt total,
-  until phase 6 starts taking items off.
+  until phase 6 starts taking items off. The sum warning shows here too (see The two pages).
 - **The rows of a new receipt appear one by one, subtly** — a short fade with a slight rise, each row a few tens of
   milliseconds after the one above. Keyed on a new `receiptId`, so a reconnect or an unlocked phone does not
   replay it (see Live updates); skipped under `prefers-reduced-motion`.
-- Phase 2's dummies leave the page: the viewer count, and the connection status line — perhaps replaced by a quiet
-  notice shown only while reconnecting, decided when planned.
+- Phase 2's dummies leave: the viewer count, page and server alike, and the connection status line, replaced by a
+  quiet "Återansluter …" shown only once the stream has been down for 2 s, so that the quick reconnect after a
+  phone is unlocked never flashes it (decided 2026-10-29).
+- **Production stays on the canned parser through `v0.5.0`** (decided 2026-10-29): this phase changes only how a
+  receipt is shown, which the canned receipt tests fully at no cost.
+
+#### Phase 5 — step by step
+
+Planned 2026-10-29; the decisions are above and in The two pages and Live updates.
+
+**5.1 The public page's real content** — Claude
+- **Backend:** the `viewers` event goes, with `ViewersResponse` and its broadcasts on connect and disconnect. The
+  provider still counts its emitters and logs the count at debug, for phase 10's dashboard. The stream is then the
+  `receipt` event on connect and on every change, and the heartbeat.
+- **Frontend:** `LiveState` loses `viewers`. The public page: the restaurant as a heading, the rows as on the
+  upload page (`ReceiptList`, its footer labelled "Kvar att dela på" there), the adjustments, the sum warning, or
+  "Inget kvitto ännu". The status line goes; "Återansluter …" shows once the status has been `reconnecting` for 2 s.
+- Tests: the stream's first event is the receipt, and no `viewers` event is sent.
+
+Verify, on the dev machine, the backend in `local` (`canned`, the hand-written recordings) and `npm run dev`, an
+owner tab on `/#/upload` and a public tab on `/#/` in a 375 px device view:
+1. `mvn verify` → `BUILD SUCCESS`.
+2. `curl -sN localhost:8082/api/public/events` shows `event:receipt` at once, no `event:viewers`, and `:ping`
+   20 s later.
+3. Without a receipt, the public tab shows "Inget kvitto ännu" and nothing else: no viewer count, no status line.
+4. An upload in the owner tab: the public tab shows the restaurant and the rows exactly as the upload page draws
+   them, adjustments included, with "Kvar att dela på" and the total as the last row.
+5. The recording that does not add up (Kebab Exempel) shows the warning on the public tab too.
+6. Stop the backend: "Återansluter …" appears after about 2 s and the receipt stays. Start it again: the notice
+   goes, and the page says "Inget kvitto ännu" (a restart empties the state).
+
+**5.2 The greeting** — Claude
+- A short fade with a slight rise per row, each starting a few tens of milliseconds after the one above, the
+  stagger capped so that the last row of a long receipt has started within about a second. CSS keyframes in
+  `index.css`, the delay per row inline.
+- On the public page only, and only for a `receiptId` the tab has not greeted before. The last greeted id is kept in
+  `sessionStorage`: a reconnect, an unlocked phone and a reload of the tab do not replay it, a new tab does.
+- Skipped under `prefers-reduced-motion`: the rows are simply there.
+
+Verify, set up as for 5.1:
+1. An upload in the owner tab: the public tab's rows appear one by one, subtly; the last has started within about
+   a second. The owner tab's rows appear at once.
+2. Reload the public tab: no replay. Toggle DevTools' network to Offline and back: no replay. A new public tab:
+   the greeting plays.
+3. "Återställ" and a new upload: the greeting plays again, the receipt id being new.
+4. With reduced motion emulated (DevTools → Rendering → `prefers-reduced-motion: reduce`), the rows appear at once.
+
+**5.3 Release `v0.5.0` and the production test** — owner, with Claude preparing
+- `./change-version.sh 0.5.0`, push the commit **and** the tag, Ctrl-C and `just doit` on the Mini. Production
+  stays on `canned`.
+
+Verify:
+1. The startup log says `Starting PbsApplication v0.5.0`.
+2. **On two phones** (or a phone and a computer): the public page on one, the upload page on the other. An upload
+   shows the rows appearing one by one on the public page, with "Kvar att dela på".
+3. Lock the public phone for a minute and unlock it: the receipt is there, no replay, no "Återansluter …" left.
+4. "Återställ" brings "Inget kvitto ännu" to the public phone.
+5. `curl -sN --max-time 25 https://pbs.tarnvik.com/api/public/events` shows `event:receipt` and a `:ping`, and
+   no `event:viewers`.
 
 **Phase 6 - Split and broadcast.** The owner assigns items; every reader follows.
 - **The owner's page:** the checkbox line on every row, one box per person, labelled with the first name; the
@@ -734,7 +793,8 @@ online after the parse gets the receipt the moment it connects. This phase gives
   discussed anyway.
 - **The public page:** an assigned item leaves the list of items; each person's total and "Kvar att dela på"
   update continuously. Whether assigned items reappear under each person: see The two pages.
-- The split calculation as in The split. The real dinner test.
+- The split calculation as in The split. The real dinner test — so production goes back to the `claude` parser
+  first (see Status).
 
 **Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
 broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
