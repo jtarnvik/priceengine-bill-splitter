@@ -866,8 +866,8 @@ phone when planned).
 **Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
 **Phase 9 - Phone polish and settings.** Layout at 375 px, tap targets, empty states, and the small adjustments the
-owner collects while using it — among them how much a ticked row greys (lightened once in `v0.5.3`, not yet judged). And a settings page for the
-owner (added 2026-10-29):
+owner collects while using it — among them how much a ticked row greys (lightened once in `v0.5.3`, not yet
+judged). And a settings page for the owner (added 2026-10-29):
 - **The four names**, changed in the app instead of in `application.properties` (see Purpose).
 - **A switch between the `canned` and `claude` parsers**, replacing the property's edit and redeploy (see Status).
   Both parsers then exist at once, where today `pbs.receipt-parser` creates only one.
