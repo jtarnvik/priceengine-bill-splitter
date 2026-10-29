@@ -1,5 +1,5 @@
 import { pbsApi } from './base-api';
-import { ConnectionStatus, LiveState, ReceiptEvent, ViewersEvent } from '../../types/live';
+import { ConnectionStatus, LiveState, ReceiptEvent } from '../../types/live';
 
 const EVENTS_URL = '/api/public/events';
 const FIRST_RETRY_DELAY_MS = 2_000;
@@ -21,7 +21,7 @@ const MAX_RETRY_DELAY_MS = 30_000;
 export const liveApi = pbsApi.injectEndpoints({
   endpoints: (build) => ({
     getLiveState: build.query<LiveState, void>({
-      queryFn: () => ({ data: { viewers: null, receipt: undefined, status: 'connecting' } }),
+      queryFn: () => ({ data: { receipt: undefined, status: 'connecting' } }),
       async onCacheEntryAdded(_arg, { updateCachedData, cacheDataLoaded, cacheEntryRemoved }) {
         await cacheDataLoaded;
 
@@ -51,12 +51,6 @@ export const liveApi = pbsApi.injectEndpoints({
             const payload = JSON.parse(event.data) as ReceiptEvent;
             updateCachedData((draft) => {
               draft.receipt = payload.receipt;
-            });
-          });
-          source.addEventListener('viewers', (event) => {
-            const payload = JSON.parse(event.data) as ViewersEvent;
-            updateCachedData((draft) => {
-              draft.viewers = payload.viewers;
             });
           });
           source.onerror = () => {

@@ -13,11 +13,16 @@ const PRICE_CLASS = 'text-right tabular-nums whitespace-nowrap';
 const DETAIL_CLASS = 'text-xs text-gray-500';
 
 type Props = {
-  receipt: Receipt
+  receipt: Receipt,
+  /** The last row's label: "Totalt" for the owner, "Kvar att dela på" for the friends. */
+  totalLabel: string
 }
 
-/** The rows in receipt order, never sorted; then the adjustments, the receipt's total and, if needed, the warning. */
-export function ReceiptList({ receipt }: Props) {
+/**
+ * The rows in receipt order, never sorted; then the adjustments, the receipt's total and, if needed, the warning.
+ * The same on both pages, so that the friends see exactly what the owner sees.
+ */
+export function ReceiptList({ receipt, totalLabel }: Props) {
   return (
     <div className="pb-2">
       {/* Out to the card's edges, so that the stripes span its width. */}
@@ -40,7 +45,7 @@ export function ReceiptList({ receipt }: Props) {
         ))}
       </ul>
       <div className="grid grid-cols-[1fr_auto] gap-x-4 border-t border-gray-300 pt-2 font-medium">
-        <div>Totalt</div>
+        <div>{totalLabel}</div>
         <div className={PRICE_CLASS}>{formatKronor(receipt.total)}</div>
       </div>
       {!receipt.totalMatches && (

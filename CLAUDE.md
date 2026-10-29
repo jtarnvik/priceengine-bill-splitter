@@ -50,11 +50,11 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 planned (2026-10-29), not started.** pbs `v0.4.1` runs on the Mini at
-`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
-log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
-they do not add up to the total; every open page gets the receipt live, the public page so far only its restaurant
-and total, beside phase 2's dummy viewer count.
+**Phases 1 to 4 done (2026-10-25 to 2026-10-29); phase 5 in progress (planned 2026-10-29).** pbs `v0.4.2` runs on
+the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
+the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
+they do not add up to the total; every open page gets the receipt live. `v0.4.2` carries step 5.1, released to be
+verified on a phone in production: the public page shows the rows too, and the viewer count is gone.
 
 **Production runs the canned parser for now** (`pbs.receipt-parser=canned` in `application-production.properties`,
 from `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost while the
@@ -526,7 +526,7 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
 - **All streams are closed on `ContextClosedEvent`.** It comes before the web server's graceful shutdown, which
   otherwise waits its full 30 s for these never-ending responses — on every deploy with a phone on the page — and
   logs `Graceful shutdown aborted with one or more requests still active` (tried, 2026-10-25).
-- **Events are named** (`event: viewers` for phase 2's dummy), never unnamed: `onmessage` sees only unnamed
+- **Events are named** (`event: receipt`; phase 2's dummy was `event: viewers`), never unnamed: `onmessage` sees only unnamed
   events, a named one needs `addEventListener`, so the dummy already uses the mechanism the real ones will.
 - The browser's 6-connections-per-site limit does not apply: Cloudflare serves the browser over HTTP/2.
 - The stream endpoint is public and read-only: `GET /api/public/events`.
@@ -679,13 +679,13 @@ state-on-connect, heartbeat, the `visibilitychange` reopen and the retry after a
 now in Infrastructure, Build, Live updates, Frontend data layer and Look and feel; the worked step plan is in git
 history.
 
-**The stream carries a dummy, the number of connected viewers, until phase 5.** *Why a viewer count and not a
+**The stream carried a dummy, the number of connected viewers, until phase 5.** *Why a viewer count and not a
 timer:* it exercises every mechanism the real stream needs, with no extra code. A timer ticking every few seconds
 never lets the stream go quiet, so it would never prove that the heartbeat keeps Cloudflare's 100-second limit
 away — the situation a real dinner is in most of the time. A viewer count is quiet until someone connects, shows
 dead-connection pruning working (a closed tab disappears within two heartbeats, 40 s: the first write to a closed
 connection usually succeeds, only the next one fails), and turns a phone's lock and unlock into a visible drop and
-return. The public page's connection status line ("Ansluten", "Återansluter …") is temporary too.
+return. The public page's connection status line ("Ansluten", "Återansluter …") went with it.
 
 **Phase 3 - Login on the upload page** ✅ (2026-10-28). The security frame, with nothing behind it yet worth
 protecting: Google login admitting only the owner (`OwnerOnlyOidcUserService`), the static-file and `/error`

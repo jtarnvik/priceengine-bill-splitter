@@ -43,7 +43,7 @@ class EventsControllerTest {
 
   /** Even with no receipt: a phone locked through a reset would otherwise reconnect to silence and keep the old one. */
   @Test
-  void events_noReceipt_startsWithNullReceiptThenViewers() throws Exception {
+  void events_noReceipt_sendsNullReceiptAndNothingElse() throws Exception {
     when(receiptService.currentReceipt()).thenReturn(Optional.empty());
 
     MvcResult result = mockMvc.perform(get("/api/public/events"))
@@ -52,9 +52,8 @@ class EventsControllerTest {
       .andReturn();
 
     assertThat(result.getResponse().getContentType()).startsWith("text/event-stream");
-    // The viewer count depends on the other tests' connections, which the shared context keeps open.
-    assertThat(result.getResponse().getContentAsString())
-      .startsWith("event:receipt\ndata:{\"receipt\":null}\n\nevent:viewers\n");
+    // Phase 2's viewer count is gone: the receipt is the whole of the state.
+    assertThat(result.getResponse().getContentAsString()).isEqualTo("event:receipt\ndata:{\"receipt\":null}\n\n");
   }
 
   @Test

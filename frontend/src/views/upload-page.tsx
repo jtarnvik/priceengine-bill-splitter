@@ -78,7 +78,7 @@ function OwnerReceipt() {
         {receipt && (
           <>
             <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
-            <ReceiptList receipt={receipt} />
+            <ReceiptList receipt={receipt} totalLabel="Totalt" />
           </>
         )}
         {error && <p role="alert" className="pb-2 text-red-700">{error}</p>}
