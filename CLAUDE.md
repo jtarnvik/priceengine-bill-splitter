@@ -50,17 +50,16 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.5` runs on
+**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.6` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
 shows each person's total and items. Steps 7.2 and 7.3 are verified on a phone — "Klar", the payment card, the
-receipt expiring 30 minutes after its last change — **except the Swish link, which the Swish app still refuses** with
-"felaktigt format". A **temporary** test panel on the owner's page, shown while done (`components/swish-test`,
-marked `TEMPORARY`), offers every link form to try; round 1 (`v0.6.3`) found that only links without a trailing
-slash open the app, round 2 (`v0.6.4`) that without it the app ignores every parameter, round 3 (`v0.6.5`) tries
-the slash with `src=qr`, the form a tester reports working. The panel goes once the working form is in
-`util/swish.ts`.
+receipt expiring 30 minutes after its last change — **except the Swish link**. Three rounds of a **temporary** test
+panel on the owner's page (`components/swish-test`, marked `TEMPORARY`, shown while done) all ended in "felaktigt
+format", because each paid the owner's own number from the owner's own phone; a link with another person's number
+worked. For round 4 (`v0.6.6`), **`PBS_SWISH_NUMBER` on the Mini temporarily holds another person's number — put the
+owner's back afterwards.** The panel goes once the working form is in `util/swish.ts`.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -664,6 +663,11 @@ stack, so its files are the reference (see Reference implementations).
   `?sw=46701234567&amt=342.00&msg=Knut%20Upplandsgatan%202026-10-29&edit=amt`. *Why so strict* (found on a phone,
   2026-10-29): with an extra `cur=SEK` an iPhone refused the link with "Länken som användes för att öppna har ett
   felaktigt format"; another bill splitter hit the same with `cur` and a `+` for a space.
+- **The Swish button cannot be tested from the payee's own phone** (found 2026-10-29, after three rounds of link
+  variants): Swish refuses a payment to its own account with the same "felaktigt format" as a malformed link. Test
+  from a friend's phone, or with another person's number in `PBS_SWISH_NUMBER` for the moment. A link typed into
+  Safari's address bar shows Swish's download page first, with an "Öppna" at the top; a link tapped on a page opens
+  the app directly.
 - An empty state ("Inget kvitto ännu") for before the first upload and after a reset or restart.
 - **No connection status, except a quiet "Återansluter …"** once the stream has been down for 2 s. *Why 2 s:* the
   quick reconnect after a phone is unlocked never flashes it, and a page that is really cut off says so before
