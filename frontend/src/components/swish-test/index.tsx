@@ -1,8 +1,12 @@
 // TEMPORARY (2026-10-29): every form of Swish link we can think of, each with its own button, to find the one an
 // iPhone accepts. Goes once swishPaymentLink in util/swish.ts uses the form that works.
+//
+// Round 1: only `…/1/p/sw` and `swish://` opened Swish without "felaktigt format"; `…/1/p/sw/`, with the slash that
+// Swish's own example has, failed even bare, and every variant with a number had that slash. app.swish.nu hands
+// every path to the app, so the app itself is refusing. Round 2: the same variants without the slash.
 import { Payment } from '../../types/live';
 
-const BASE = 'https://app.swish.nu/1/p/sw/';
+const BASE = 'https://app.swish.nu/1/p/sw';
 const AMOUNT = '1.00';
 
 type Variant = {
@@ -37,8 +41,8 @@ function variants(payment: Payment): Variant[] {
   const { international, national, plus } = numberForms(payment.swishNumber);
   const message = payment.message;
   return [
-    { label: '1. Bara Swish-länken, inget annat', url: BASE },
-    { label: '2. Bara Swish-länken, utan snedstreck sist', url: BASE.slice(0, -1) },
+    { label: '1. Bara Swish-länken, utan snedstreck (fungerade i omgång 1)', url: BASE },
+    { label: '2. Bara Swish-länken, med snedstreck (fel i omgång 1)', url: `${BASE}/` },
     { label: '3. Nummer 46…', url: `${BASE}?${query([['sw', international]])}` },
     { label: '4. Nummer 0…', url: `${BASE}?${query([['sw', national]])}` },
     { label: '5. Nummer +46…', url: `${BASE}?${query([['sw', plus]])}` },
@@ -62,7 +66,7 @@ function variants(payment: Payment): Variant[] {
       url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', 'Test'], ['edit', 'amt,msg']])}`,
     },
     {
-      label: '13. Som appen gör nu: 46… + belopp + riktigt meddelande + edit=amt',
+      label: '13. Hela betalningen: 46… + belopp + riktigt meddelande + edit=amt',
       url: `${BASE}?${query([['sw', international], ['amt', AMOUNT], ['msg', message], ['edit', 'amt']])}`,
     },
     {
@@ -79,7 +83,7 @@ function variants(payment: Payment): Variant[] {
 export function SwishTestPanel({ payment }: { payment: Payment }) {
   return (
     <section className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-gray-800">
-      <h2 className="font-medium">Swish-test (tillfälligt)</h2>
+      <h2 className="font-medium">Swish-test, omgång 2: utan snedstreck (tillfälligt)</h2>
       <p className="pb-2 text-sm text-gray-600">Varje variant öppnar Swish på sitt sätt. Belopp 1 kr. Avbryt i appen.</p>
       <ul className="flex flex-col gap-3">
         {variants(payment).map((variant) => (
