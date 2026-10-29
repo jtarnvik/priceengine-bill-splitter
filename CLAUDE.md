@@ -351,8 +351,9 @@ iOS limits canvas area, and a 48 MP photo exceeds it.
 
 - Anthropic Java SDK (`com.anthropic:anthropic-java`), **model `claude-opus-5-5`, effort `medium`** (decided
   2026-10-28). *Why the most capable model:* a misread price is the error that matters, and at one receipt per
-  dinner the cost does not — about 5–10 US cents a receipt (an image of at most ~4,800 tokens plus the prompt in,
-  1,000–4,000 tokens out with thinking), against half that on Sonnet 5.5 and well under a cent on Haiku 5.5. The
+  dinner the cost does not. **Measured (2026-10-29)** on the first real receipt, 14 lines, a 562 × 1280 photo:
+  7 s, 2,581 tokens in and 611 out (thinking included), about 2.3 US cents, every line right. A photo at the full
+  2576 px adds at most ~3,800 image tokens, some 1.5 cents. Sonnet 5.5 costs half and Haiku 5.5 a fraction. The
   recordings make a measured comparison cheap later: the same images through another model or effort, for öre.
 - **Structured output, typed.** `MessageCreateParams.builder()...outputConfig(ParsedReceipt.class)` gives a
   `StructuredMessageCreateParams<ParsedReceipt>` and the response comes back as that class. Jackson's
@@ -742,7 +743,7 @@ Verify, with the backend in `local` (`canned`, two or more hand-written recordin
    "Inget kvitto ännu" on the public tab.
 5. The upload request in DevTools' Network tab is `image/jpeg` and well under 2 MB, whatever the image chosen.
 
-**4.4 First real receipts** — owner, Claude tuning the prompt
+**4.4 First real receipts** — owner, Claude tuning the prompt ✅
 - `pbs.receipt-parser=claude` in `local`. Two or three real receipts, photographed with the phone and uploaded
   from the dev machine's browser. Claude compares each recording with the paper and adjusts the prompt and field
   descriptions; then `local` goes back to `canned`, on these recordings.

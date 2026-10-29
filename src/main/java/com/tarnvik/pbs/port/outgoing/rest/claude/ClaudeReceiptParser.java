@@ -56,8 +56,8 @@ public class ClaudeReceiptParser implements ReceiptParser {
     This is a photo of a receipt from a restaurant in Sweden. Read it into the requested structure. Four friends \
     will split the bill by its items, so every amount must be exactly what the receipt says.
 
-    Amounts are in öre, as integers: 1 krona is 100 öre. Swedish receipts write a decimal comma and may group \
-    thousands with a space, so "245,50" is 24550, "180" is 18000 and "1 234,00" is 123400.
+    Amounts are in öre, as integers: 1 krona is 100 öre. Receipts write the decimals after a comma or a point and \
+    may group thousands with a space, so "245,50" and "245.50" are 24550, "180" is 18000 and "1 234,00" is 123400.
 
     Which lines are what:
     - Every line with a price of its own is one item, in the receipt's order. A line with a quantity, such as \
