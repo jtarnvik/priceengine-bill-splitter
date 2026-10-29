@@ -55,11 +55,10 @@ the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
 shows each person's total and items. Steps 7.2 and 7.3 are verified on a phone — "Klar", the payment card, the
-receipt expiring 30 minutes after its last change — **except the Swish link**. Three rounds of a **temporary** test
-panel on the owner's page (`components/swish-test`, marked `TEMPORARY`, shown while done) all ended in "felaktigt
-format", because each paid the owner's own number from the owner's own phone; a link with another person's number
-worked. For round 4 (`v0.6.6`), **`PBS_SWISH_NUMBER` on the Mini temporarily holds another person's number — put the
-owner's back afterwards.** The panel goes once the working form is in `util/swish.ts`.
+receipt expiring 30 minutes after its last change — and the Swish link, once tried with another person's number:
+from the owner's own phone it can only fail (see The two pages). Four rounds of a temporary test panel found that;
+the panel is gone, and the real button's link was right all along. **`PBS_SWISH_NUMBER` on the Mini still holds the
+other person's number from that test — put the owner's back before the next deploy.**
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -659,10 +658,11 @@ stack, so its files are the reference (see Reference implementations).
   `encodeURIComponent` — not `URLSearchParams`, which writes a space as `+`. The message, built on the server, is
   "<restaurant> <date of the upload>" within Swish's set — a–ö, 0–9, space and `!?(),.-:;` — accents dropped except
   on å, ä and ö, dashes made plain, anything else a space, cut to 50.
-- **The link has exactly the form of Swish's developer guide** and nothing more:
-  `?sw=46701234567&amt=342.00&msg=Knut%20Upplandsgatan%202026-10-29&edit=amt`. *Why so strict* (found on a phone,
-  2026-10-29): with an extra `cur=SEK` an iPhone refused the link with "Länken som användes för att öppna har ett
-  felaktigt format"; another bill splitter hit the same with `cur` and a `+` for a space.
+- **The link has the form of Swish's developer guide**, confirmed on an iPhone (2026-10-29):
+  `https://app.swish.nu/1/p/sw/?sw=46701234567&amt=342.00&msg=Knut%20Upplandsgatan%202026-10-29&edit=amt`. The
+  trailing slash in the path matters: without it the app opens but ignores every parameter. The number as `46…`.
+  `cur=SEK` and `src=qr` are accepted too but not needed; the `swish://payment?data=…` form works as well, but asks
+  "Do you want to open" first.
 - **The Swish button cannot be tested from the payee's own phone** (found 2026-10-29, after three rounds of link
   variants): Swish refuses a payment to its own account with the same "felaktigt format" as a malformed link. Test
   from a friend's phone, or with another person's number in `PBS_SWISH_NUMBER` for the moment. A link typed into
@@ -859,7 +859,7 @@ Verify:
 2. `git status` shows neither file; `git check-ignore` names both.
 3. The logo file is in `frontend/src/assets/`.
 
-**7.2 Done, payment and expiry — backend** — Claude
+**7.2 Done, payment and expiry — backend** — Claude ✅
 - `pbs.payee`, `pbs.swish-number=${PBS_SWISH_NUMBER}`, `pbs.receipt-expiry=30m`; the test profile gets a made-up
   number. The state gains `done` and the time of the last change (from a `Clock` bean, so tests can move time).
 - `PUT /api/protected/receipt/done` (S3); ticks refused while done (S2). The `split` event gains `done` and
@@ -881,7 +881,7 @@ Verify, on the dev machine, the backend in `local` (`canned`):
    `{"receipt":null}` and the log `Receipt expired`.
 5. `grep -c` for the number in the log → `0`.
 
-**7.3 "Klar" and the Swish buttons — frontend** — Claude
+**7.3 "Klar" and the Swish buttons — frontend** — Claude ✅
 - The client regenerated. The owner's page: "Klar" under the footer, enabled when nothing is left; while done,
   "Ångra klar" instead and the boxes disabled.
 - The public page while done: the payment card (S6), the Swish link built from the event (S7, `edit=amt`,
