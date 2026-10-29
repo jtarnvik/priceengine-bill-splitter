@@ -24,6 +24,7 @@
         <npm.version>11.17.0</npm.version>
         <!-- overlord's version, proven on Boot 4.1. -->
         <springdoc-openapi.version>3.1.1</springdoc-openapi.version>
+        <anthropic-java.version>3.3.0</anthropic-java.version>
     </properties>
     <dependencies>
         <dependency>
@@ -43,6 +44,11 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc-openapi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>${anthropic-java.version}</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -13,9 +14,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,11 +34,21 @@ class SecurityConfigTest {
 
   @Autowired MockMvc mockMvc;
 
+  /**
+   * The parse endpoint is the only one on the internet that costs money per call. Cheap insurance against a security
+   * matcher reordered later.
+   */
   @Test
-  void protectedEndpoint_anonymous_gets401NotRedirect() throws Exception {
-    mockMvc.perform(get("/api/protected/ping").accept(MediaType.TEXT_HTML))
+  void receiptUpload_anonymous_gets401NotRedirect() throws Exception {
+    mockMvc.perform(multipart("/api/protected/receipt").file(jpeg()).accept(MediaType.TEXT_HTML))
       .andExpect(status().isUnauthorized())
       .andExpect(header().doesNotExist("Location"));
+  }
+
+  @Test
+  void receiptReset_anonymous_gets401() throws Exception {
+    mockMvc.perform(delete("/api/protected/receipt"))
+      .andExpect(status().isUnauthorized());
   }
 
   /**
@@ -51,17 +63,22 @@ class SecurityConfigTest {
     assertThat(result.getRequest().getSession(false)).isNull();
   }
 
+  /** Through to the canned parser and the hand-written receipts in src/test/resources/recordings. */
   @Test
-  void protectedEndpoint_anonymousPost_gets401() throws Exception {
-    mockMvc.perform(post("/api/protected/ping"))
-      .andExpect(status().isUnauthorized());
+  void receiptUploadAndReset_owner_getThrough() throws Exception {
+    mockMvc.perform(multipart("/api/protected/receipt").file(jpeg()).with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.items[0].id").value(1))
+      .andExpect(jsonPath("$.items[1].id").value(2));
+    mockMvc.perform(delete("/api/protected/receipt").with(ownerLogin()))
+      .andExpect(status().isNoContent());
   }
 
   @Test
-  void protectedEndpoint_owner_getsThrough() throws Exception {
-    mockMvc.perform(get("/api/protected/ping").with(ownerLogin()))
-      .andExpect(status().isOk())
-      .andExpect(content().string("ok"));
+  void receiptUpload_ownerWithNonJpeg_gets400() throws Exception {
+    MockMultipartFile png = new MockMultipartFile("image", "receipt.png", MediaType.IMAGE_PNG_VALUE, new byte[] {1});
+    mockMvc.perform(multipart("/api/protected/receipt").file(png).with(ownerLogin()))
+      .andExpect(status().isBadRequest());
   }
 
   @Test
@@ -129,6 +146,10 @@ class SecurityConfigTest {
   void openApiSpec_isOffOutsideLocal() throws Exception {
     mockMvc.perform(get("/v3/api-docs"))
       .andExpect(status().isNotFound());
+  }
+
+  private static MockMultipartFile jpeg() {
+    return new MockMultipartFile("image", "receipt.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
   }
 
   private static RequestPostProcessor ownerLogin() {

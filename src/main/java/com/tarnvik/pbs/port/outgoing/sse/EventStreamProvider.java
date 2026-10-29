@@ -1,5 +1,7 @@
 package com.tarnvik.pbs.port.outgoing.sse;
 
+import com.tarnvik.pbs.model.Receipt;
+import com.tarnvik.pbs.port.incoming.rest.dto.ReceiptEvent;
 import com.tarnvik.pbs.port.incoming.rest.dto.ViewersResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.ContextClosedEvent;
@@ -10,31 +12,39 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
 /**
  * The Server-Sent Events registry: every open page holds one emitter here. The mechanics are overlord's
  * SseNotificationProvider's — long timeout, comment heartbeat, dead emitters dropped on a failed send — but each event
  * carries the whole state rather than a "something changed" signal (see Live updates in CLAUDE.md).
  *
- * <p>The state in phase 2 is the number of connected pages, so it changes on every connect and every removal. That
- * also makes the state-on-connect rule free: a new page is a change, and the broadcast that follows reaches the new
- * page too.
+ * <p>A new page gets the current state as its first events, so that a reconnect is indistinguishable from a first
+ * connect: {@code receipt} always, {@code {"receipt": null}} when there is none. The viewer count, phase 2's dummy,
+ * follows; it changes on every connect anyway, and its broadcast reaches the new page too.
  */
 @Slf4j
 @Component
 public class EventStreamProvider {
   // Long-lived stream; the browser's EventSource reconnects by itself whenever it is closed.
   private static final long EMITTER_TIMEOUT_MILLIS = Duration.ofHours(24).toMillis();
+  private static final String RECEIPT_EVENT = "receipt";
   private static final String VIEWERS_EVENT = "viewers";
 
   private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
   /**
-   * Registers a new page. The returned emitter must be handed back from the controller method, so that Spring keeps
-   * the response open. Anything sent before that is buffered and goes out first.
+   * Registers a new page and sends it the current receipt. The returned emitter must be handed back from the
+   * controller method, so that Spring keeps the response open. Anything sent before that is buffered and goes out
+   * first.
+   *
+   * <p>Synchronised with broadcastReceipt, and the receipt read only once the emitter is registered, so that an
+   * upload at the same moment cannot leave the new page with the receipt before it: either the read sees the new
+   * receipt, or the broadcast of it comes after.
    */
-  public SseEmitter connect() {
+  public synchronized SseEmitter connect(Supplier<Optional<Receipt>> currentReceipt) {
     SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MILLIS);
     emitter.onCompletion(() -> remove(emitter));
     emitter.onTimeout(() -> {
@@ -44,8 +54,14 @@ public class EventStreamProvider {
     emitter.onError(e -> remove(emitter));
     emitters.add(emitter);
     log.debug("SSE client connected, {} active connection(s)", emitters.size());
+    send(emitter, receiptEvent(currentReceipt.get().orElse(null)));
     broadcastViewers();
     return emitter;
+  }
+
+  /** The new receipt to every page, or {@code null} after a reset. */
+  public synchronized void broadcastReceipt(Receipt receipt) {
+    broadcast(receiptEvent(receipt));
   }
 
   /**
@@ -81,19 +97,27 @@ public class EventStreamProvider {
     }
   }
 
+  private static SseEmitter.SseEventBuilder receiptEvent(Receipt receipt) {
+    return SseEmitter.event().name(RECEIPT_EVENT).data(new ReceiptEvent(receipt), MediaType.APPLICATION_JSON);
+  }
+
   private void broadcastViewers() {
     broadcast(SseEmitter.event().name(VIEWERS_EVENT).data(new ViewersResponse(emitters.size()), MediaType.APPLICATION_JSON));
   }
 
   private void broadcast(SseEmitter.SseEventBuilder event) {
     for (SseEmitter emitter : emitters) {
-      try {
-        emitter.send(event);
-      } catch (Exception e) {
-        // Client gone (IOException) or emitter already completed; the error callback drops it.
-        log.trace("Dropping dead SSE emitter: {}", e.getMessage());
-        emitter.completeWithError(e);
-      }
+      send(emitter, event);
+    }
+  }
+
+  private static void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
+    try {
+      emitter.send(event);
+    } catch (Exception e) {
+      // Client gone (IOException) or emitter already completed; the error callback drops it.
+      log.trace("Dropping dead SSE emitter: {}", e.getMessage());
+      emitter.completeWithError(e);
     }
   }
 }

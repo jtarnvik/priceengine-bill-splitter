@@ -1,6 +1,7 @@
 package com.tarnvik.pbs.port.incoming.rest;
 
 import com.tarnvik.pbs.port.outgoing.sse.EventStreamProvider;
+import com.tarnvik.pbs.service.ReceiptService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -18,9 +19,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class EventsController {
   private final EventStreamProvider eventStreamProvider;
+  private final ReceiptService receiptService;
 
   @GetMapping(value = "/api/public/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter events() {
-    return eventStreamProvider.connect();
+    return eventStreamProvider.connect(receiptService::currentReceipt);
   }
 }

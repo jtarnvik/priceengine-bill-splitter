@@ -1,0 +1,15 @@
+{
+  "parsedReceipt": {
+    "restaurantName": "Trattoria Exempel",
+    "total": 75800,
+    "items": [
+      { "name": "Pizza Margherita", "quantity": 1, "unitPrice": null, "price": 14500, "note": null },
+      { "name": "Pizza Quattro Formaggi med gorgonzola, mozzarella, parmesan och pecorino", "quantity": 1,
+        "unitPrice": null, "price": 17900, "note": null },
+      { "name": "Öl", "quantity": 3, "unitPrice": 6000, "price": 18000, "note": null },
+      { "name": "Lasagne", "quantity": 1, "unitPrice": null, "price": 16500, "note": "glutenfri" },
+      { "name": "Tiramisu", "quantity": 1, "unitPrice": null, "price": 8900, "note": null }
+    ],
+    "adjustments": []
+  }
+}

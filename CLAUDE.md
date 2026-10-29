@@ -361,7 +361,8 @@ iOS limits canvas area, and a 48 MP photo exceeds it.
 - **Thinking cannot be disabled on Opus 5.5** and effort defaults to `medium` — set effort explicitly rather than
   relying on the default.
 - **Timeout 90 s** on the client, below Cloudflare's 100 s, so a slow parse ends in an error message rather than
-  a 524. A parse is expected to take 10–30 s, synchronously.
+  a 524. A parse is expected to take 10–30 s, synchronously. **`maxRetries(0)`:** the SDK retries timeouts too
+  (twice by default), and a second 90 s attempt would run past Cloudflare's limit; the owner taps again instead.
 - **Check `stop_reason` before reading the content.** A `refusal` is unlikely for a receipt but has to produce an
   error message, not a crash. *No refusal fallback* (the API's retry on another model): it needs the beta API, for
   a case that should not happen with a receipt.
@@ -370,6 +371,9 @@ iOS limits canvas area, and a 48 MP photo exceeds it.
 
 - **Money as integer öre (`long`)**, never `double`, in the schema as well as in Java, so the model never answers
   `24.999999`.
+- **The nullable fields are `Optional` in `ParsedReceipt`.** The SDK's schema generator makes every field required;
+  `Optional<Long>` becomes `"type": ["integer", "null"]`, but a plain nullable `Long` a required integer, which the
+  model would have to make up. `ClaudeReceiptParserTest` checks the generated schema without calling the API.
 - **One row per receipt line, quantities kept together** (decided 2026-10-28, replacing "one row per unit"). "3 ×
   Öl 180 kr" is one row with quantity 3, unit price 60 kr and price 180 kr. **The line's price is the one that
   counts** — it is what the receipt states and what is split; quantity and unit price are information. *Accepted
@@ -617,7 +621,6 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 |---|---|---|---|
 | GET | `/ping` | Public | Health check for UptimeRobot |
 | GET | `/api/auth/me` | Owner | The owner's email, or 401 |
-| GET | `/api/protected/ping` | Owner | Placeholder, removed in phase 4 once the receipt endpoints exist |
 | GET | `/api/public/events` | Public | SSE stream; current state on connect, then on every change |
 | POST | `/api/protected/receipt` | Owner | Multipart image → parse → replaces the state, broadcasts it, answers it |
 | DELETE | `/api/protected/receipt` | Owner | Reset: no receipt, broadcast to every phone |
@@ -684,7 +687,7 @@ dinner on its own.
 Planned 2026-10-28 from the owner's requirements; the decisions are in Purpose, Receipt parsing, State, Live
 updates, The two pages and API.
 
-**4.1 Parse, record, reset and the `receipt` event — backend** — Claude
+**4.1 Parse, record, reset and the `receipt` event — backend** — Claude ✅
 - `com.anthropic:anthropic-java`. `ParsedReceipt` with its `@JsonPropertyDescription`s and the prompt, Swedish
   receipt conventions included ("Att betala", "öresavrundning", quantity lines).
 - `ReceiptParser`, implemented by `ClaudeReceiptParser` — the provider, in `port.outgoing.rest.claude`, adapted

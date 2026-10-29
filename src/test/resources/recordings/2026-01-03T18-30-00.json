@@ -1,0 +1,12 @@
+{
+  "parsedReceipt": {
+    "restaurantName": "Kebab Exempel",
+    "total": 31800,
+    "items": [
+      { "name": "Kebabtallrik", "quantity": 1, "unitPrice": null, "price": 13900, "note": "stark sås" },
+      { "name": "Falafeltallrik", "quantity": 1, "unitPrice": null, "price": 11900, "note": null },
+      { "name": "Ayran", "quantity": 2, "unitPrice": 2500, "price": 5000, "note": null }
+    ],
+    "adjustments": []
+  }
+}

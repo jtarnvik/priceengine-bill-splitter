@@ -43,6 +43,10 @@ release/
 deployment/bin/
 deployment/logs/
 deployment/*.env
+# Recordings of real parses (pbs.recording-dir): photos of receipts. Anchored, so that the hand-written ones in
+# src/test/resources/recordings are not ignored.
+/recordings/
+/deployment/recordings/
 pom.xml.versionsBackup
 
 # Frontend (Node and npm are downloaded into frontend/node by frontend-maven-plugin)
