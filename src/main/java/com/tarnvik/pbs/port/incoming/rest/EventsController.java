@@ -23,6 +23,6 @@ public class EventsController {
 
   @GetMapping(value = "/api/public/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter events() {
-    return eventStreamProvider.connect(receiptService::currentReceipt);
+    return eventStreamProvider.connect(receiptService::currentState);
   }
 }

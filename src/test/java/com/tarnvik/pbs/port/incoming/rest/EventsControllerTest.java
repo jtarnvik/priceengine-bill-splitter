@@ -2,6 +2,8 @@ package com.tarnvik.pbs.port.incoming.rest;
 
 import com.tarnvik.pbs.model.Receipt;
 import com.tarnvik.pbs.model.ReceiptItem;
+import com.tarnvik.pbs.model.ReceiptState;
+import com.tarnvik.pbs.model.Split;
 import com.tarnvik.pbs.port.outgoing.sse.EventStreamProvider;
 import com.tarnvik.pbs.service.ReceiptService;
 import org.junit.jupiter.api.Test;
@@ -44,7 +46,7 @@ class EventsControllerTest {
   /** Even with no receipt: a phone locked through a reset would otherwise reconnect to silence and keep the old one. */
   @Test
   void events_noReceipt_sendsNullReceiptAndNothingElse() throws Exception {
-    when(receiptService.currentReceipt()).thenReturn(Optional.empty());
+    when(receiptService.currentState()).thenReturn(Optional.empty());
 
     MvcResult result = mockMvc.perform(get("/api/public/events"))
       .andExpect(status().isOk())
@@ -56,15 +58,22 @@ class EventsControllerTest {
     assertThat(result.getResponse().getContentAsString()).isEqualTo("event:receipt\ndata:{\"receipt\":null}\n\n");
   }
 
+  /** The receipt first, then who had what: the page needs the rows before it can place the ticks. */
   @Test
-  void events_withReceipt_startsWithIt() throws Exception {
+  void events_withReceipt_startsWithItThenTheSplit() throws Exception {
     Receipt receipt = new Receipt(UUID.randomUUID(), "Trattoria", 18000,
       List.of(new ReceiptItem(1, "Öl", 3, 6000L, 18000, null)), List.of(), 18000, true);
-    when(receiptService.currentReceipt()).thenReturn(Optional.of(receipt));
+    Split split = new Split(receipt.receiptId(), List.of(new Split.Item(1, List.of("Anna"))),
+      List.of(new Split.Person("Anna", List.of(new Split.ItemShare(1, 18000)), 0, 18000)),
+      new Split.Unassigned(0, 0));
+    when(receiptService.currentState()).thenReturn(Optional.of(new ReceiptState(receipt, split)));
 
     MvcResult result = mockMvc.perform(get("/api/public/events")).andReturn();
 
-    assertThat(result.getResponse().getContentAsString()).startsWith(
+    String stream = result.getResponse().getContentAsString();
+    assertThat(stream).startsWith(
       "event:receipt\ndata:{\"receipt\":{\"receiptId\":\"" + receipt.receiptId() + "\",\"restaurantName\":\"Trattoria\"");
+    assertThat(stream).contains("\n\nevent:split\ndata:{\"receiptId\":\"" + receipt.receiptId()
+      + "\",\"items\":[{\"id\":1,\"people\":[\"Anna\"]}]");
   }
 }

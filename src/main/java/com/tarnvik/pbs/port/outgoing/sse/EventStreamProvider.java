@@ -1,6 +1,8 @@
 package com.tarnvik.pbs.port.outgoing.sse;
 
 import com.tarnvik.pbs.model.Receipt;
+import com.tarnvik.pbs.model.ReceiptState;
+import com.tarnvik.pbs.model.Split;
 import com.tarnvik.pbs.port.incoming.rest.dto.ReceiptEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.ContextClosedEvent;
@@ -20,8 +22,9 @@ import java.util.function.Supplier;
  * SseNotificationProvider's — long timeout, comment heartbeat, dead emitters dropped on a failed send — but each event
  * carries the whole state rather than a "something changed" signal (see Live updates in CLAUDE.md).
  *
- * <p>A new page gets the current state as its first event, so that a reconnect is indistinguishable from a first
- * connect: {@code receipt} always, {@code {"receipt": null}} when there is none.
+ * <p>A new page gets the current state as its first events, so that a reconnect is indistinguishable from a first
+ * connect: {@code receipt} always, {@code {"receipt": null}} when there is none, then {@code split} when there is a
+ * receipt.
  *
  * <p>The number of connected pages is logged at debug on every connect and disconnect; phase 2 broadcast it as a
  * dummy event, and phase 10's terminal dashboard may show it.
@@ -32,19 +35,20 @@ public class EventStreamProvider {
   // Long-lived stream; the browser's EventSource reconnects by itself whenever it is closed.
   private static final long EMITTER_TIMEOUT_MILLIS = Duration.ofHours(24).toMillis();
   private static final String RECEIPT_EVENT = "receipt";
+  private static final String SPLIT_EVENT = "split";
 
   private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
   /**
-   * Registers a new page and sends it the current receipt. The returned emitter must be handed back from the
-   * controller method, so that Spring keeps the response open. Anything sent before that is buffered and goes out
-   * first.
+   * Registers a new page and sends it the current state, receipt and split from one snapshot. The returned emitter
+   * must be handed back from the controller method, so that Spring keeps the response open. Anything sent before
+   * that is buffered and goes out first.
    *
-   * <p>Synchronised with broadcastReceipt, and the receipt read only once the emitter is registered, so that an
-   * upload at the same moment cannot leave the new page with the receipt before it: either the read sees the new
-   * receipt, or the broadcast of it comes after.
+   * <p>Synchronised with the broadcasts, and the state read only once the emitter is registered, so that a change at
+   * the same moment cannot leave the new page with the state before it: either the read sees the change, or the
+   * broadcast of it comes after.
    */
-  public synchronized SseEmitter connect(Supplier<Optional<Receipt>> currentReceipt) {
+  public synchronized SseEmitter connect(Supplier<Optional<ReceiptState>> currentState) {
     SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MILLIS);
     emitter.onCompletion(() -> remove(emitter));
     emitter.onTimeout(() -> {
@@ -54,13 +58,20 @@ public class EventStreamProvider {
     emitter.onError(e -> remove(emitter));
     emitters.add(emitter);
     log.debug("SSE client connected, {} active connection(s)", emitters.size());
-    send(emitter, receiptEvent(currentReceipt.get().orElse(null)));
+    Optional<ReceiptState> state = currentState.get();
+    send(emitter, receiptEvent(state.map(ReceiptState::receipt).orElse(null)));
+    state.ifPresent(present -> send(emitter, splitEvent(present.split())));
     return emitter;
   }
 
   /** The new receipt to every page, or {@code null} after a reset. */
   public synchronized void broadcastReceipt(Receipt receipt) {
     broadcast(receiptEvent(receipt));
+  }
+
+  /** Who had what, to every page, after every change to it. */
+  public synchronized void broadcastSplit(Split split) {
+    broadcast(splitEvent(split));
   }
 
   /**
@@ -97,6 +108,10 @@ public class EventStreamProvider {
 
   private static SseEmitter.SseEventBuilder receiptEvent(Receipt receipt) {
     return SseEmitter.event().name(RECEIPT_EVENT).data(new ReceiptEvent(receipt), MediaType.APPLICATION_JSON);
+  }
+
+  private static SseEmitter.SseEventBuilder splitEvent(Split split) {
+    return SseEmitter.event().name(SPLIT_EVENT).data(split, MediaType.APPLICATION_JSON);
   }
 
   private void broadcast(SseEmitter.SseEventBuilder event) {

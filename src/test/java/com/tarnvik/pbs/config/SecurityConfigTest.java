@@ -1,5 +1,6 @@
 package com.tarnvik.pbs.config;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,7 +11,10 @@ import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
@@ -18,6 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -43,6 +48,33 @@ class SecurityConfigTest {
     mockMvc.perform(multipart("/api/protected/receipt").file(jpeg()).accept(MediaType.TEXT_HTML))
       .andExpect(status().isUnauthorized())
       .andExpect(header().doesNotExist("Location"));
+  }
+
+  @Test
+  void assignees_anonymous_gets401() throws Exception {
+    mockMvc.perform(put("/api/protected/items/1/assignees").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"receiptId\": \"" + UUID.randomUUID() + "\", \"people\": [\"Anna\"]}"))
+      .andExpect(status().isUnauthorized());
+  }
+
+  /** Through to the service: the current receipt's id is accepted, anything else is refused with its own status. */
+  @Test
+  void assignees_owner_getThroughAndAreChecked() throws Exception {
+    MvcResult upload = mockMvc.perform(multipart("/api/protected/receipt").file(jpeg()).with(ownerLogin()))
+      .andExpect(status().isOk())
+      .andReturn();
+    String receiptId = JsonPath.read(upload.getResponse().getContentAsString(), "$.receiptId");
+
+    mockMvc.perform(assignees(1, receiptId, "[\"Anna\", \"Kia\"]")).andExpect(status().isNoContent());
+    mockMvc.perform(assignees(1, UUID.randomUUID().toString(), "[\"Anna\"]")).andExpect(status().isConflict());
+    mockMvc.perform(assignees(999, receiptId, "[\"Anna\"]")).andExpect(status().isNotFound());
+    mockMvc.perform(assignees(1, receiptId, "[\"Bertil\"]"))
+      .andExpect(status().isBadRequest())
+      .andExpect(jsonPath("$.message").value("Bertil är inte med och delar."));
+    // Bean Validation: the receipt id is required.
+    mockMvc.perform(put("/api/protected/items/1/assignees").with(ownerLogin()).contentType(MediaType.APPLICATION_JSON)
+        .content("{\"people\": []}"))
+      .andExpect(status().isBadRequest());
   }
 
   @Test
@@ -146,6 +178,12 @@ class SecurityConfigTest {
   void openApiSpec_isOffOutsideLocal() throws Exception {
     mockMvc.perform(get("/v3/api-docs"))
       .andExpect(status().isNotFound());
+  }
+
+  private static MockHttpServletRequestBuilder assignees(int itemId, String receiptId, String people) {
+    return put("/api/protected/items/" + itemId + "/assignees").with(ownerLogin())
+      .contentType(MediaType.APPLICATION_JSON)
+      .content("{\"receiptId\": \"" + receiptId + "\", \"people\": " + people + "}");
   }
 
   private static MockMultipartFile jpeg() {
