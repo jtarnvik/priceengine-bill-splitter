@@ -10,11 +10,15 @@ import { useGetLiveStateQuery } from '../communication/api/live-api';
 import {
   useResetReceiptMutation,
   useSetItemAssigneesMutation,
+  useSetReceiptDoneMutation,
   useUploadReceiptMutation
 } from '../communication/api/receipt-api';
 import { AxiosQueryError } from '../communication/axios-base-query';
 import { useLoginState } from '../hook/use-login-state';
 import { downscaleToJpeg } from '../util/downscale-image';
+
+const SECONDARY_BUTTON_CLASS =
+  'rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:bg-gray-100 cursor-pointer disabled:cursor-default';
 
 // The owner's page, behind login.
 export function UploadPage() {
@@ -48,11 +52,13 @@ function OwnerReceipt() {
   const [uploadReceipt, { isLoading: uploading }] = useUploadReceiptMutation();
   const [resetReceipt] = useResetReceiptMutation();
   const [setItemAssignees] = useSetItemAssigneesMutation();
+  const [setReceiptDone, { isLoading: settingDone }] = useSetReceiptDoneMutation();
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const receipt = data?.receipt;
   const split = data?.split;
+  const allAssigned = split?.items.every((item) => item.people.length > 0) ?? false;
 
   async function handleFileChosen(file: File) {
     setError(null);
@@ -77,6 +83,19 @@ function OwnerReceipt() {
       await setItemAssignees({ id: itemId, assigneesRequest: { receiptId: receipt.receiptId, people } }).unwrap();
     } catch (failure) {
       setError(failureMessage(failure, 'Bocken kunde inte sparas. Försök igen.'));
+    }
+  }
+
+  // "Klar" or its undoing, as a whole state; the split event then shows it on every page, this one included.
+  async function handleDone(done: boolean) {
+    if (!receipt) {
+      return;
+    }
+    setError(null);
+    try {
+      await setReceiptDone({ doneRequest: { receiptId: receipt.receiptId, done } }).unwrap();
+    } catch (failure) {
+      setError(failureMessage(failure, done ? 'Kunde inte markera klar. Försök igen.' : 'Kunde inte ångra. Försök igen.'));
     }
   }
 
@@ -105,19 +124,35 @@ function OwnerReceipt() {
                 // Before the split's event, which follows the receipt at once, nothing is assigned.
                 { label: 'Kvar att dela på', amount: split?.unassigned.total ?? receipt.linesTotal },
               ]}
-              assignment={split ? { split, onChange: handleAssign } : undefined}
+              assignment={split ? { split, onChange: handleAssign, disabled: split.done } : undefined}
             />
           </>
         )}
         {error && <p role="alert" className="pb-2 text-red-700">{error}</p>}
       </Card>
+      {split?.done && (
+        <p className="text-sm text-gray-600">Klar. Vännerna ser sina Swish-knappar; ångra för att ändra något.</p>
+      )}
       {receipt && (
-        <button
-          className="self-start rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:bg-gray-100 cursor-pointer"
-          onClick={() => setConfirmingReset(true)}
-        >
-          Återställ
-        </button>
+        <div className="flex gap-2">
+          {/* Only with everything assigned: the amounts in the Swish buttons must be final. */}
+          {split?.done ? (
+            <button className={SECONDARY_BUTTON_CLASS} disabled={settingDone} onClick={() => handleDone(false)}>
+              Ångra klar
+            </button>
+          ) : (
+            <button
+              className="rounded-md bg-brand px-4 py-2 font-medium text-white hover:bg-brand-hover cursor-pointer disabled:cursor-default disabled:bg-brand/40"
+              disabled={!allAssigned || settingDone}
+              onClick={() => handleDone(true)}
+            >
+              Klar
+            </button>
+          )}
+          <button className={SECONDARY_BUTTON_CLASS} onClick={() => setConfirmingReset(true)}>
+            Återställ
+          </button>
+        </div>
       )}
       <ConfirmDialog
         open={confirmingReset}

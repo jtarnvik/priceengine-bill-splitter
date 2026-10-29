@@ -1,7 +1,7 @@
 import { Card } from '../components/common/card';
 import { View } from '../components/common/view';
 import { ReceiptList } from '../components/receipt-list';
-import { ADJUSTMENT_SHARE_LABEL, SplitPeople, SplitTotals } from '../components/split';
+import { ADJUSTMENT_SHARE_LABEL, SplitPayment, SplitPeople, SplitTotals } from '../components/split';
 import { Receipt } from '../communication/api/generated-api';
 import { useGetLiveStateQuery } from '../communication/api/live-api';
 import { useDelayedFlag } from '../hook/use-delayed-flag';
@@ -46,7 +46,9 @@ function PublicReceipt({ receipt, split }: { receipt: Receipt, split: Split | nu
     <>
       <Card>
         <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
-        {split && <SplitTotals receipt={receipt} split={split} />}
+        {/* Done, the totals become the payment card, where each friend already looks for their sum. */}
+        {split?.payment && <SplitPayment receipt={receipt} split={split} payment={split.payment} />}
+        {split && !split.payment && <SplitTotals receipt={receipt} split={split} />}
       </Card>
       <Card>
         <LeftToSplit receipt={receipt} split={split} greet={greet} />

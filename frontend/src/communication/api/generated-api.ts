@@ -1,11 +1,22 @@
 import { pbsApi as api } from "./base-api";
-export const addTagTypes = ["split", "receipt", "auth"] as const;
+export const addTagTypes = ["receipt", "split", "auth"] as const;
 const injectedRtkApi = api
   .enhanceEndpoints({
     addTagTypes,
   })
   .injectEndpoints({
     endpoints: (build) => ({
+      setReceiptDone: build.mutation<
+        SetReceiptDoneApiResponse,
+        SetReceiptDoneApiArg
+      >({
+        query: (queryArg) => ({
+          url: `/api/protected/receipt/done`,
+          method: "PUT",
+          body: queryArg.doneRequest,
+        }),
+        invalidatesTags: ["receipt"],
+      }),
       setItemAssignees: build.mutation<
         SetItemAssigneesApiResponse,
         SetItemAssigneesApiArg
@@ -42,6 +53,10 @@ const injectedRtkApi = api
     overrideExisting: false,
   });
 export { injectedRtkApi as generatedApi };
+export type SetReceiptDoneApiResponse = unknown;
+export type SetReceiptDoneApiArg = {
+  doneRequest: DoneRequest;
+};
 export type SetItemAssigneesApiResponse = unknown;
 export type SetItemAssigneesApiArg = {
   id: number;
@@ -59,6 +74,10 @@ export type GetMeApiResponse = /** status 200 OK */ MeResponse;
 export type GetMeApiArg = void;
 export type ErrorMessageResponse = {
   message: string;
+};
+export type DoneRequest = {
+  receiptId: string;
+  done: boolean;
 };
 export type AssigneesRequest = {
   receiptId: string;
@@ -89,6 +108,7 @@ export type MeResponse = {
   email: string;
 };
 export const {
+  useSetReceiptDoneMutation,
   useSetItemAssigneesMutation,
   useUploadReceiptMutation,
   useResetReceiptMutation,

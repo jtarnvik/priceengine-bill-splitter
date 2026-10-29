@@ -52,6 +52,16 @@ export const receiptApi = generatedApi.enhanceEndpoints({
         }
       },
     },
+    setReceiptDone: {
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+        } catch (failure) {
+          // The split event brings the new state; there is nothing to write, only a lost session to notice.
+          onUnauthorised(failure, dispatch);
+        }
+      },
+    },
     setItemAssignees: {
       async onQueryStarted({ id, assigneesRequest }, { dispatch, queryFulfilled }) {
         const patch = dispatch(liveApi.util.updateQueryData('getLiveState', undefined, (draft) => {
@@ -71,4 +81,9 @@ export const receiptApi = generatedApi.enhanceEndpoints({
   },
 });
 
-export const { useUploadReceiptMutation, useResetReceiptMutation, useSetItemAssigneesMutation } = receiptApi;
+export const {
+  useUploadReceiptMutation,
+  useResetReceiptMutation,
+  useSetItemAssigneesMutation,
+  useSetReceiptDoneMutation
+} = receiptApi;

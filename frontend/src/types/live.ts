@@ -21,7 +21,19 @@ export interface Split {
   items: SplitItem[],
   people: SplitPerson[],
   /** What nobody has been ticked for yet: "Kvar att dela på". */
-  unassigned: { adjustmentShare: number, total: number }
+  unassigned: { adjustmentShare: number, total: number },
+  /** Whether the owner has pressed "Klar": the amounts are final, and the friends can pay. */
+  done: boolean,
+  /** Who to pay and how; only while done, so the owner's number reaches the page then and at no other time. */
+  payment: Payment | null
+}
+
+export interface Payment {
+  /** The participant who paid the bill; their row gets no Swish button. */
+  payee: string,
+  swishNumber: string,
+  /** The restaurant and the date, already within Swish's characters and 50 of them. */
+  message: string
 }
 
 export interface SplitItem {

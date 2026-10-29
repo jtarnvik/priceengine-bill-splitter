@@ -40,7 +40,9 @@ type Props = {
   /** The owner's ticking: a line of boxes under every item, one per person, set from and sent as whole sets. */
   assignment?: {
     split: Split,
-    onChange: (itemId: number, people: string[]) => void
+    onChange: (itemId: number, people: string[]) => void,
+    /** While the split is done: the amounts in the Swish buttons must not change under a friend paying. */
+    disabled: boolean
   }
 }
 
@@ -83,6 +85,7 @@ export function ReceiptList({ receipt, footer, greet = false, assignment }: Prop
                   names={assignment.split.people.map((person) => person.name)}
                   people={people}
                   onChange={(newPeople) => assignment.onChange(item.id, newPeople)}
+                  disabled={assignment.disabled}
                 />
               )}
             </li>
@@ -128,7 +131,8 @@ export function ReceiptList({ receipt, footer, greet = false, assignment }: Prop
 type AssigneeBoxesProps = {
   names: string[],
   people: string[],
-  onChange: (people: string[]) => void
+  onChange: (people: string[]) => void,
+  disabled: boolean
 }
 
 /**
@@ -136,7 +140,7 @@ type AssigneeBoxesProps = {
  * label is the tap target, larger than the box. A tap sends the row's whole new set of people, in the order of the
  * names — never a toggle, so that a request repeated or arriving late changes nothing it should not.
  */
-function AssigneeBoxes({ names, people, onChange }: AssigneeBoxesProps) {
+function AssigneeBoxes({ names, people, onChange, disabled }: AssigneeBoxesProps) {
   function toggle(name: string) {
     const ticked = people.includes(name);
     onChange(names.filter((candidate) => (candidate === name ? !ticked : people.includes(candidate))));
@@ -145,11 +149,15 @@ function AssigneeBoxes({ names, people, onChange }: AssigneeBoxesProps) {
   return (
     <div className="col-span-2 grid grid-cols-4 gap-x-1 pt-1">
       {names.map((name) => (
-        <label key={name} className="flex min-w-0 items-center gap-1.5 py-1.5 text-sm text-gray-800 cursor-pointer select-none">
+        <label
+          key={name}
+          className={`flex min-w-0 items-center gap-1.5 py-1.5 text-sm select-none ${disabled ? 'text-gray-400' : 'text-gray-800 cursor-pointer'}`}
+        >
           <input
             type="checkbox"
-            className="h-4 w-4 shrink-0 accent-brand cursor-pointer"
+            className={`h-4 w-4 shrink-0 accent-brand ${disabled ? '' : 'cursor-pointer'}`}
             checked={people.includes(name)}
+            disabled={disabled}
             onChange={() => toggle(name)}
           />
           <span className="truncate">{name}</span>
