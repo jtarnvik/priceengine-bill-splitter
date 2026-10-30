@@ -55,8 +55,8 @@ but last (phase 10).
 by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
-expires 30 minutes after its last change. `v0.7.1` carries steps 9.1 and 9.2, released to be verified on a phone:
-the owner's settings — names, payee, parser — in a dialog; `v0.7.2` fixes a failed send breaking off a broadcast.
+expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
+settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -908,7 +908,7 @@ owner the same day, and move into the design as the steps are done.
 - **T9. The polish is a list the owner gathers**, worked through in one step at the end, each item small: the
   greying, what 375 px shows, tap targets, empty states.
 
-**9.1 Settings — backend** — Claude
+**9.1 Settings — backend** — Claude ✅
 - A `SettingsService` holding names, payee and parser in memory, from `pbs.participants`, `pbs.payee` and
   `pbs.receipt-parser` at startup. `ReceiptService` asks it for the names and the payee instead of holding them;
   both parsers exist, and the setting picks one per upload (T6, T7).
@@ -925,7 +925,7 @@ Verify, on the dev machine:
    `PUT` that changes a name, and nothing after one that does not.
 4. With `claude`, the next upload logs `ClaudeReceiptParser`; with `canned`, `CannedReceiptParser`.
 
-**9.2 The settings dialog — frontend** — Claude
+**9.2 The settings dialog — frontend** — Claude ✅
 - The client regenerated. "Inställningar" in the menu when logged in (T1); the dialog with the names field, the
   payee among them (T3), the parser as two choices, "Spara" and "Avbryt"; the warning before a reset (T4); refusals
   shown as the server words them.
