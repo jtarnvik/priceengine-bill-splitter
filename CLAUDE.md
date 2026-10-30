@@ -51,12 +51,12 @@ but last (phase 10).
 ## Status
 
 **Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after
-1.0 as phase 11. pbs `v0.7.1` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
+1.0 as phase 11. pbs `v0.7.2` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
 by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
 expires 30 minutes after its last change. `v0.7.1` carries steps 9.1 and 9.2, released to be verified on a phone:
-the owner's settings — names, payee, parser — in a dialog.
+the owner's settings — names, payee, parser — in a dialog; `v0.7.2` fixes a failed send breaking off a broadcast.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -583,6 +583,10 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
   exactly Cloudflare's 502 while pbs restarts during a deploy. So on `CLOSED` it is reopened after a delay growing
   from 2 s to 30 s; otherwise every open page would stop updating after each deploy until its phone was locked
   and unlocked.
+- **A failed send only drops the page from the list** (fixed 2026-10-30): the container reports the error and Spring
+  ends the response itself. Calling `completeWithError` on top of that — as the copy of overlord's mechanics did —
+  races it; Tomcat refuses it from the scheduler's thread with an `IllegalStateException`, which escaped the `catch`
+  and broke off the whole broadcast, so every page after the dead one missed that ping or event.
 - **All streams are closed on `ContextClosedEvent`.** It comes before the web server's graceful shutdown, which
   otherwise waits its full 30 s for these never-ending responses — on every deploy with a phone on the page — and
   logs `Graceful shutdown aborted with one or more requests still active` (tried, 2026-10-25).

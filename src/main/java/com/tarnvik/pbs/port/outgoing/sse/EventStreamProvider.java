@@ -49,7 +49,7 @@ public class EventStreamProvider {
    * broadcast of it comes after.
    */
   public synchronized SseEmitter connect(Supplier<Optional<ReceiptState>> currentState) {
-    SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MILLIS);
+    SseEmitter emitter = newEmitter();
     emitter.onCompletion(() -> remove(emitter));
     emitter.onTimeout(() -> {
       emitter.complete();
@@ -93,9 +93,19 @@ public class EventStreamProvider {
   @EventListener(ContextClosedEvent.class)
   public void closeAll() {
     for (SseEmitter emitter : emitters) {
-      emitter.complete();
+      try {
+        emitter.complete();
+      } catch (Exception e) {
+        // Already ended by the container: one that cannot be completed must not keep the others open.
+        log.trace("SSE emitter already ended: {}", e.getMessage());
+      }
     }
     emitters.clear();
+  }
+
+  /** Package-private, so that a test can hand in emitters of its own. */
+  SseEmitter newEmitter() {
+    return new SseEmitter(EMITTER_TIMEOUT_MILLIS);
   }
 
   private void remove(SseEmitter emitter) {
@@ -120,13 +130,19 @@ public class EventStreamProvider {
     }
   }
 
-  private static void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
+  /**
+   * A failed send drops the page from the list and nothing more: the container reports the error and Spring ends
+   * the response itself. Calling completeWithError here, as this once did, races that — Tomcat refuses it from an
+   * application thread with an IllegalStateException, which escaped the catch and broke off the whole broadcast,
+   * so every page after the dead one missed the event.
+   */
+  private void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
     try {
       emitter.send(event);
     } catch (Exception e) {
-      // Client gone (IOException) or emitter already completed; the error callback drops it.
+      // Client gone (IOException), or the emitter already ended (IllegalStateException).
       log.trace("Dropping dead SSE emitter: {}", e.getMessage());
-      emitter.completeWithError(e);
+      remove(emitter);
     }
   }
 }
