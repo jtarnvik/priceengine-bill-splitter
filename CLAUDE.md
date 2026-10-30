@@ -56,8 +56,9 @@ by UptimeRobot, its log collected by the log-retention stack. The owner logs in 
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
 expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
-settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. `v0.7.3`
-carries step 9.3, reloading a page on a new version; `v0.7.4`, otherwise the same, is the new version to reload on.
+settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. Step 9.3
+is verified on a phone: deploying `v0.7.4` reloaded a page left open on `v0.7.3` by itself (the wait for an open
+dialog is covered by its code, not yet tried on a phone).
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -944,7 +945,7 @@ Verify, logged in, at 375 px:
 3. Five names, or the same name twice, are refused with a Swedish message, and nothing changes.
 4. Switching the parser changes the line under the upload button, and the next upload uses it.
 
-**9.3 Reload on a new version** — Claude
+**9.3 Reload on a new version** — Claude ✅
 - `pbs.version=@project.version@`; `event: version` first on every connect (T8); the page keeps its first version
   and reloads on another, waiting while a dialog is open or a request is under way (`use-reload-on-new-version.ts`).
 
