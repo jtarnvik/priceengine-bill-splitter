@@ -89,10 +89,13 @@ function SwishButton({ href }: { href: string }) {
     <a
       href={href}
       aria-label="Betala med Swish"
-      className="flex shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50"
+      className="flex shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50"
     >
-      {/* The stacked logo, symbol over wordmark, suits a tall button. */}
-      <img src={swishLogo} alt="" className="h-12 w-auto" />
+      {/*
+        The stacked logo, symbol over wordmark, suits a tall button. Sized to leave room above and below it in the
+        card's height (2026-10-30: at h-12 it filled the button with no margin and looked cramped).
+      */}
+      <img src={swishLogo} alt="" className="h-11 w-auto" />
       Betala
     </a>
   );
