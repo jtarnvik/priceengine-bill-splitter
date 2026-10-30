@@ -51,20 +51,19 @@ but last (phase 10).
 ## Status
 
 **Phases 1 to 7 and 9 done (2026-10-25 to 2026-10-30); phase 10 in progress (planned 2026-10-30)** — phase 8
-moved after 1.0 as phase 11. pbs `v0.9.1` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy,
+moved after 1.0 as phase 11. pbs `v1.0.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy,
 monitored by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a
 receipt and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and
 presses "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the
 receipt expires 30 minutes after its last change. The owner sets the names, the payee and the parser in the app, and
 a page left open reloads itself after a deploy. Steps 10.1 and 10.2 are verified on the Mini: pbs's terminal
-dashboard (`v0.9.1`, still on the canned parser), and the full-width heading on all three boards (publicbackend
-`v1.11.1`, overlord `v2.34.1`).
+dashboard (`v0.9.1`), and the full-width heading on all three boards (publicbackend `v1.11.1`, overlord `v2.34.1`).
+`v1.0.0`, step 10.3, starts on Claude.
 
-**Production starts on the canned parser** (`pbs.receipt-parser=canned`, the default in every profile until 1.0),
-answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 to 9 were built and tested on
-it, the canned receipts being all there is to test with until a dinner. **The real dinner test is still to come**:
-switch to "Claude" in the app's settings before the receipt is photographed — after every restart, since the
-setting lives in memory until 1.0 makes `claude` the default.
+**Production starts on Claude from `v1.0.0`** (`pbs.receipt-parser=claude`); development starts on the canned
+parser, so that a test upload costs nothing. Phases 5 to 10 were built and tested on the canned parser in
+production too, the canned receipts being all there was to test with. **The real dinner test is still to come.** For
+a try-out at no cost, switch to "Inspelade kvitton" in the settings — it lasts until the next restart.
 
 The design below was worked out in one discussion (October 2026) before the repository existed. Treat it as decided
 unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text from this file as it is
@@ -459,7 +458,7 @@ digits, and no tip to complicate the total.
   machine to develop against them.
 - **`claude` or `canned`, switched in the app's settings** (phase 9). Both parsers always exist, and the setting picks
   one per upload, so the Claude parser needs `ANTHROPIC_API_KEY` at startup in every profile. `pbs.receipt-parser`
-  is the parser at startup: `canned` in every profile until 1.0, which makes it `claude`. The canned parser answers
+  is the parser at startup: `claude` from 1.0, `canned` in `local` and `test`. The canned parser answers
   with the recordings in name order, a different one per upload, so that reset and a new upload show a new receipt,
   after a second's pause, so that the waiting state can be seen. It reads only the `*.json` directly in the folder,
   not in subfolders. Switched to `claude` in development, it makes new recordings with the development key.
@@ -965,7 +964,7 @@ Verify:
 3. A page left open on `v0.9.0` reloads itself.
 
 **`v1.0.0`** is released once phases 9 and 10 are done — **with `pbs.receipt-parser=claude` as the default**
-(decided 2026-10-30): until then pbs starts on the canned parser.
+(decided 2026-10-30); development keeps starting on the canned parser.
 
 ### After 1.0
 
