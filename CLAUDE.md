@@ -50,15 +50,14 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 7 and 9 done (2026-10-25 to 2026-10-30); phase 10 in progress (planned 2026-10-30)** — phase 8
-moved after 1.0 as phase 11. pbs `v1.0.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy,
-monitored by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a
-receipt and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and
-presses "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the
-receipt expires 30 minutes after its last change. The owner sets the names, the payee and the parser in the app, and
-a page left open reloads itself after a deploy. Steps 10.1 and 10.2 are verified on the Mini: pbs's terminal
-dashboard (`v0.9.1`), and the full-width heading on all three boards (publicbackend `v1.11.1`, overlord `v2.34.1`).
-`v1.0.0`, step 10.3, starts on Claude.
+**Phases 1 to 7, 9 and 10 done (2026-10-25 to 2026-10-30): `v1.0.0`.** Phase 8, corrections, moved after 1.0 as
+phase 11, built only if real dinners show it is missed. pbs `v1.0.0` runs on the Mini at `https://pbs.tarnvik.com`,
+behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the log-retention stack, with a status
+board in its terminal. The owner logs in with Google, photographs a receipt and Claude reads it into rows, with a
+warning when they do not add up to the total; the owner ticks who had what and presses "Klar"; every open page
+follows live, each reader says who they are and gets their own Swish button, and the receipt expires 30 minutes
+after its last change. The owner sets the names, the payee and the parser in the app, and a page left open reloads
+itself after a deploy.
 
 **Production starts on Claude from `v1.0.0`** (`pbs.receipt-parser=claude`); development starts on the canned
 parser, so that a test upload costs nothing. Phases 5 to 10 were built and tested on the canned parser in
@@ -767,6 +766,25 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 - *Possibly later:* menu items to filter the public page — "Alla" or "Bara jag" and then a name. Decided once
   phase 6 shows what that page feels like at the table.
 
+## Terminal dashboard
+
+Under `production`, pbs draws a status board on the terminal it runs in on the Mini (phase 10), in
+`port.outgoing.terminal`, like publicbackend's and overlord's — so the three foreground tabs on the Mini look and
+work alike. **The mechanics are publicbackend's, copied:** jline; one render thread owns the screen, and listeners
+only wake it; repaints on events plus one hourly clock (`DashboardRefreshJob`); the console appender detached by
+name once the board is up, startup output left visible in the main screen; Ctrl-C and shutdown restore the terminal.
+Read publicbackend's "Terminal dashboard" section for the reasons behind each.
+
+- **It shows** "PriceEngine Bill Splitter", Version, Built and Started (from Spring Boot's `build-info`), and
+  `Receipt parser:` as a coloured block — ` CLAUDE ` green, ` CANNED ` yellow — since it decides whether an upload
+  costs money. The block follows the setting at once: every save publishes `SettingsChangedEvent`.
+- **The blue heading spans the terminal's full width** and follows a resize: the resize signal repaints with the
+  new size, and the heading pads itself to it. publicbackend and overlord got the same (2026-10-30).
+- *Watch:* the board needs a real terminal (a TTY), so `start-pbs.sh` must keep not piping through `tee`, and
+  `logback-spring.xml` must keep the console appender named `CONSOLE` — read publicbackend's "Logging" section before
+  changing either. *To try it off the Mini* without a terminal of one's own, a pseudo-terminal from Python's `pty`
+  module, sized with `TIOCSWINSZ`, works: that is how 10.1 was checked, resize and Ctrl-C included.
+
 ## API
 
 | Method | Path | Auth | Description |
@@ -889,82 +907,16 @@ history.
 
 ### Operations
 
-**Phase 10 - Terminal dashboard.** A status board on the terminal pbs runs in on the Mini, under `production`, like
-publicbackend's and overlord's — so the three foreground tabs on the Mini look and work alike. Copy publicbackend's
-mechanics (jline in `port.outgoing.terminal`, one render thread owning the screen, repaints driven by Spring
-events plus one hourly clock, the console appender detached by name once the alternate screen is up, startup
-output left visible). Decided 2026-10-30:
-- **What it shows:** a heading, then Version, Built and Started as the other two show them, and the one piece of
-  state wanted: whether `canned` or `claude` reads the receipts.
-- **One difference from the other two, made in all three:** the blue heading line spans the terminal's full width,
-  and follows it when the window is resized. publicbackend and overlord get the same change.
-- *Why last:* it shows the state of features that do not exist yet, and nothing else depends on it.
-- *Watch:* the dashboard needs a real terminal (a TTY), so `start-pbs.sh` must keep not piping through `tee`, and
-  `logback-spring.xml` must declare the console appender by a name the dashboard can detach — read
-  publicbackend's "Logging" section before changing either.
+**Phase 10 - Terminal dashboard** ✅ (2026-10-30). pbs's board on the Mini, modelled on publicbackend's: the heading,
+Version, Built and Started, and the receipt parser as a coloured block that follows the setting. The one difference
+from the other two boards, made in all three: the blue heading spans the terminal's width and follows a resize
+(publicbackend `v1.11.1`, overlord `v2.34.1`). On the way, overlord's deploy failed until the Mini's `~/.ssh/config`
+named Bitbucket's new SSH host, `ssh.bitbucket.org`, beside the old. Eight decisions were made in planning and
+accepted by the owner (U1–U8). Released as `v0.9.1`, then **`v1.0.0`**, which starts on Claude. What it established is
+now in Terminal dashboard and Recording and canned responses; the worked step plan is in git history.
 
-#### Phase 10 — step by step
-
-Planned 2026-10-30 by Claude from the owner's decisions above and the code of both dashboards; the decisions below,
-U1–U8, were accepted by the owner the same day.
-
-*Decisions:*
-- **U1. Full width by padding the heading to the terminal's current width on every draw.** Both dashboards already
-  repaint on the terminal's resize signal (`WINCH`) with the new size, so nothing else is needed: a wider window
-  gets a longer bar, a narrower one a shorter. Today publicbackend's bar is as long as its text and overlord's 40
-  columns.
-- **U2. The heading reads "PriceEngine Bill Splitter"**, as the header bar in the browser.
-- **U3. Version, Built and Started from Spring Boot's build info**, as publicbackend: the `build-info` goal in the
-  pom, which also gives the build time. The `pbs.version` property from 9.3 stays for the stream.
-- **U4. The parser as a coloured block**, like publicbackend's ON/OFF: `Receipt parser:` followed by ` CANNED ` in
-  yellow or ` CLAUDE ` in green. Labels in English, as on the other two boards. *Why a block:* which one answers
-  decides whether an upload costs money, and should be seen at a glance.
-- **U5. The line follows the setting at once:** `SettingsService` publishes a `SettingsChangedEvent` on every save,
-  and the board repaints on it; the item reads the setting from memory, so a repaint costs nothing.
-- **U6. jline 4.4.8**, the newest; the other two stay on their own versions until they have a reason to move.
-- **U7. The change to publicbackend and overlord is one commit in each repository**, in its own conventions, and
-  the owner deploys each the way that repository does.
-- **U8. The phase ends with `v1.0.0`**, which makes `claude` the default parser (see below).
-
-**10.1 The dashboard — pbs** — Claude ✅
-- `jline`; `build-info` in the pom; `DashboardService` and `DashboardItem` in `port.outgoing.terminal`, copied from
-  publicbackend; the heading with Version, Built and Started (U1–U3); the parser line (U4, U5); the hourly
-  repaint job. All under `production` only.
-- Tests: the heading padded to the given width and cut to a narrower one; the parser line's two states.
-
-Verify, on the dev machine in a real terminal (not IntelliJ's run window, which is no TTY):
-1. `mvn verify` → `BUILD SUCCESS`.
-2. Started under `production` with the development secrets:
-   ```
-   set -a; source local-secrets.properties; set +a
-   FOLDER_BASE=/tmp/pbs-dashboard java -jar target/pbs-*.jar --spring.profiles.active=production
-   ```
-   The startup lines show, then the board: the blue heading across the whole width, Version, Built, Started,
-   and `Receipt parser:` with ` CANNED `.
-3. Making the window wider and narrower: the heading follows, never wrapping.
-4. Switching to Claude in the settings, logged in through Vite (`npm run dev`, `localhost:5173` — Google accepts no
-   other local redirect): the block turns ` CLAUDE ` at once.
-5. Ctrl-C: the board goes, the startup output is back, and the shell's cursor works.
-6. `/tmp/pbs-dashboard/logs/pbs.log` kept receiving log lines while the board was up.
-
-**10.2 The full-width heading — publicbackend and overlord** — Claude ✅
-- In `../publicbackend` (`VersionItem`) and `../cl-media/overlord` (`HeaderItem`), the heading padded to the
-  terminal's width (U1); each repository's build passes, one commit in each (U7).
-
-Verify, after the owner has deployed each the usual way:
-1. On the Mini, both boards' headings span their terminal tab's width and follow a resize.
-
-**10.3 Release `v1.0.0`** — owner, with Claude preparing
-- `pbs.receipt-parser=claude` in `application.properties` (U8). `./change-version.sh 1.0.0`, push the commit and
-  the tag, Ctrl-C and `just doit` on the Mini.
-
-Verify:
-1. The startup log says `Starting PbsApplication v1.0.0`, and the board shows ` CLAUDE `.
-2. The upload page says "Claude läser kvittot."; the next real receipt is parsed by Claude.
-3. A page left open on `v0.9.0` reloads itself.
-
-**`v1.0.0`** is released once phases 9 and 10 are done — **with `pbs.receipt-parser=claude` as the default**
-(decided 2026-10-30); development keeps starting on the canned parser.
+**`v1.0.0`** was released 2026-10-30, once phases 9 and 10 were done, **with `pbs.receipt-parser=claude` as the
+default** in production; development keeps starting on the canned parser.
 
 ### After 1.0
 
