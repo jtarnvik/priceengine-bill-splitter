@@ -56,8 +56,9 @@ monitored by UptimeRobot, its log collected by the log-retention stack. The owne
 receipt and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and
 presses "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the
 receipt expires 30 minutes after its last change. The owner sets the names, the payee and the parser in the app, and
-a page left open reloads itself after a deploy. `v0.9.1` carries step 10.1, the terminal dashboard, still on the
-canned parser; publicbackend `v1.11.1` and overlord `v2.34.1` carry 10.2, the full-width heading on theirs.
+a page left open reloads itself after a deploy. Steps 10.1 and 10.2 are verified on the Mini: pbs's terminal
+dashboard (`v0.9.1`, still on the canned parser), and the full-width heading on all three boards (publicbackend
+`v1.11.1`, overlord `v2.34.1`).
 
 **Production starts on the canned parser** (`pbs.receipt-parser=canned`, the default in every profile until 1.0),
 answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 to 9 were built and tested on
@@ -926,7 +927,7 @@ U1–U8, were accepted by the owner the same day.
   the owner deploys each the way that repository does.
 - **U8. The phase ends with `v1.0.0`**, which makes `claude` the default parser (see below).
 
-**10.1 The dashboard — pbs** — Claude
+**10.1 The dashboard — pbs** — Claude ✅
 - `jline`; `build-info` in the pom; `DashboardService` and `DashboardItem` in `port.outgoing.terminal`, copied from
   publicbackend; the heading with Version, Built and Started (U1–U3); the parser line (U4, U5); the hourly
   repaint job. All under `production` only.
@@ -947,7 +948,7 @@ Verify, on the dev machine in a real terminal (not IntelliJ's run window, which 
 5. Ctrl-C: the board goes, the startup output is back, and the shell's cursor works.
 6. `/tmp/pbs-dashboard/logs/pbs.log` kept receiving log lines while the board was up.
 
-**10.2 The full-width heading — publicbackend and overlord** — Claude
+**10.2 The full-width heading — publicbackend and overlord** — Claude ✅
 - In `../publicbackend` (`VersionItem`) and `../cl-media/overlord` (`HeaderItem`), the heading padded to the
   terminal's width (U1); each repository's build passes, one commit in each (U7).
 
