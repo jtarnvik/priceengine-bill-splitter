@@ -50,16 +50,12 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.11` runs on
-the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
-the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
-they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
-shows each person's total and items. Steps 7.2 and 7.3 are verified on a phone — "Klar", the payment card, the
-receipt expiring 30 minutes after its last change — and the Swish link, once tried with another person's number:
-from the owner's own phone it can only fail (see The two pages). Four rounds of a temporary test panel found that;
-the panel is gone, and the real button's link was right all along. The owner's number is back in
-`PBS_SWISH_NUMBER`. Added since: "Slumpa" for canned receipts (`v0.6.7`), and "Vem är du?" with each reader's own
-Swish button (`v0.6.8`).
+**Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 8 not planned yet.** pbs `v0.7.0` runs on the Mini at
+`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
+log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
+they do not add up to the total; the owner ticks who had what and presses "Klar"; every open page follows live,
+each reader says who they are and gets their own Swish button, and the receipt expires 30 minutes after its last
+change.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -351,6 +347,13 @@ its files. Read publicbackend's `CLAUDE.md` "Deployment" for the reasoning, espe
 **Give pbs its own Anthropic key, ideally in its own Console workspace with a spending limit.** A leak or a bug
 then costs at most the limit, and the key can be revoked without touching publicbackend's deviation
 interpretation.
+
+**The owner's Swish number is a secret like the others** (decided 2026-10-29): never in a tracked file — a phone
+number identifies the owner far beyond a first name — and never logged. *Why send it at all:* without a recipient
+each friend has to find the owner in Swish themselves, and paying the wrong person is the likelier mishap. It is
+sent only while a split is done, to every page that is open or opens in that time, and dropped on undo, reset or
+expiry. *The address is not secret* — this repository names `pbs.tarnvik.com` — so what bounds the exposure is time:
+the receipt expires 30 minutes after its last change (see State).
 
 ## Receipt parsing
 
@@ -716,6 +719,11 @@ keeps it.
 
 ### Look and feel — sl-dashboard's, in green
 
+*The Swish logo* is Swish's own, from its marketing toolbox (`https://www.swish.nu/marketing-toolbox/logotype`):
+the primary, stacked logo for light backgrounds, `frontend/src/assets/swish-logo-primary-light-bg.svg` (renamed from
+"Swish Logo Primary Light-BG SVG.svg"), used unaltered as its guidelines say. It may be committed: it is a public
+brand asset.
+
 The same frame as sl-dashboard, so the owner's apps feel like one family; read its files before writing these
 (see Reference implementations). Tailwind 4 through PostCSS and Roboto, as there. **The UI is in Swedish**, as
 sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is English.
@@ -830,99 +838,18 @@ canned parser; the real dinner test is still to come (see Status). What it estab
 assignment request, State, Live updates, Frontend data layer and The two pages; the worked step plan is in git
 history.
 
-**Phase 7 - Done, and Swish.** An end state: the owner's "Klar" marks the split done on the server, which is
-broadcast, and every reader then shows a Swish button per person — none for the owner, who is paid. The button is a
-link opening the Swish app: `https://app.swish.nu/1/p/sw/?sw=<number>&amt=<amount>&msg=<message>&edit=amt`, in
-exactly the form of Swish's developer guide (see The two pages).
-- **Amount:** the person's rounded total. **Message:** the restaurant and the date, cut to Swish's 50 characters,
-  URL-encoded (åäö, spaces).
-- **`edit=amt`**, so that a friend can change the amount in the app. Swish locks a prefilled amount otherwise, and
-  the design lets the friends round up as they see fit.
-- **"Klar" can be undone**, hiding the buttons again, for a mistake spotted at the table. Reset clears everything.
-- **The owner's phone number is included** (decided 2026-10-29), as a secret like the others: `PBS_SWISH_NUMBER` in
-  `deployment/pbs.env` on the Mini and in `local-secrets.properties` in development, both gitignored, never in a
-  tracked file — the repository is public, and a phone number identifies the owner far beyond a first name. Not
-  logged. It is sent only while the split is done, to every page that is open or opens in that time, and dropped
-  on undo, reset or expiry. *Why include it:* without a recipient each friend has to find the owner in Swish
-  themselves, and paying the wrong person is the likelier mishap. *The address is not secret:* this repository
-  names `pbs.tarnvik.com`, so what bounds the exposure is time, not obscurity.
-- **The receipt expires after 30 minutes** (decided 2026-10-29): it is reset automatically, number and all. *Why:*
-  a forgotten reset would otherwise leave the number on a public page until the next restart, possibly for weeks.
-  A friend who wants to keep the sums takes a screenshot.
-- The Swish logo from Swish's marketing toolbox (`https://www.swish.nu/marketing-toolbox/logotype#primary`),
-  used as its guidelines say.
-
-#### Phase 7 — step by step
-
-Planned 2026-10-29 by Claude from the design above and the owner's two decisions (the number, the expiry); its
-eight decisions, S1–S8, were accepted by the owner the same day, S1, S2 and S6 to be tried at the table, and are now
-in the design: S1 the expiry from the last change and S2 "Klar" only when everything is assigned, ticks locked
-while done (State); S3 done as a whole state (State, API); S4 done and the payment in the `split` event (Live
-updates); S5 the payee configured, S6 the payment card (replaced 2026-10-30 by each reader's own button, see The two
-pages), S7 the message on the server and the link in the browser
-(The two pages); S8 the number as written, its form checked on a phone in 7.4.
-
-**7.1 The number and the logo** — owner, Claude walking through ✅
-- `PBS_SWISH_NUMBER=…` into `local-secrets.properties` and as `export PBS_SWISH_NUMBER=…` into `deployment/pbs.env` on
-  the Mini, **before** 7.2's code runs anywhere: startup fails without it. Claude adds the empty name to both
-  `.example` files and the Environment variables table.
-- The Swish logo from the marketing toolbox, the variant its guidelines prescribe for a button on a light
-  background, saved as SVG in `frontend/src/assets/`. It is Swish's public brand asset and may be committed.
-
-Verify:
-1. `grep -c '^PBS_SWISH_NUMBER=.' local-secrets.properties` on the dev machine and
-   `grep -c '^export PBS_SWISH_NUMBER=.' deployment/pbs.env` on the Mini → `1` each.
-2. `git status` shows neither file; `git check-ignore` names both.
-3. The logo file is in `frontend/src/assets/`.
-
-**7.2 Done, payment and expiry — backend** — Claude ✅
-- `pbs.payee`, `pbs.swish-number=${PBS_SWISH_NUMBER}`, `pbs.receipt-expiry=30m`; the test profile gets a made-up
-  number. The state gains `done` and the time of the last change (from a `Clock` bean, so tests can move time).
-- `PUT /api/protected/receipt/done` (S3); ticks refused while done (S2). The `split` event gains `done` and
-  `payment` (S4, S7). An upload starts not done.
-- `ReceiptExpiryJob` in `port.incoming.scheduled`: every minute, a receipt untouched for `pbs.receipt-expiry` is
-  reset and broadcast, and the log says `Receipt expired` — without the number.
-- Tests: done and undone, with the payment present only while done; `done: true` with something left → 409; a tick
-  while done → 409; a stale `receiptId` → 409; the message's characters and length; expiry after the idle time and
-  not before, any change restarting it; an anonymous `PUT …/done` → 401; startup failing without the number or with
-  a payee not among the participants.
-
-Verify, on the dev machine, the backend in `local` (`canned`):
-1. `mvn verify` → `BUILD SUCCESS`.
-2. Logged in through Vite, the cookie copied from DevTools: with every item assigned, `PUT …/receipt/done` with
-   `"done": true` → `204`, and the stream shows a `split` event with `"done":true` and the payment; with `false`,
-   the payment is gone from the next event.
-3. With an item left, `"done": true` → `409`; a tick while done → `409`.
-4. Started with `-Dpbs.receipt-expiry=2m`: two to three minutes after the last change, the stream shows
-   `{"receipt":null}` and the log `Receipt expired`.
-5. `grep -c` for the number in the log → `0`.
-
-**7.3 "Klar" and the Swish buttons — frontend** — Claude ✅
-- The client regenerated. The owner's page: "Klar" under the footer, enabled when nothing is left; while done,
-  "Ångra klar" instead and the boxes disabled.
-- The public page while done: the payment card (S6), the Swish link built from the event (S7, `edit=amt`,
-  `cur=SEK`), the button with the logo as its guidelines say.
-- The `split` type in `types/live.ts` gains `done` and `payment`.
-
-Verify, with the backend in `local` (`canned`) and `npm run dev`, an owner tab and a public tab at 375 px:
-1. "Klar" is disabled until "Kvar att dela på" is `0,00 kr`. Pressed, the public tab shows the payment card at
-   once: a Swish button for every person but Jesper, whose row says "Får betalt".
-2. The owner's boxes are disabled while done; "Ångra klar" brings them back and removes the buttons on both tabs.
-3. A button's link carries the number, the person's total, `edit=amt` and the message, encoded (DevTools).
-
-**7.4 Release `v0.7.0` and the Swish test** — owner, with Claude preparing
-- `./change-version.sh 0.7.0`, push the commit and the tag, Ctrl-C and `just doit` on the Mini. Production stays on
-  `canned`.
-
-Verify:
-1. The startup log says `Starting PbsApplication v0.7.0`.
-2. **On a phone, with a friend's phone if one is at hand:** a split marked done; tapping a Swish button opens the
-   Swish app with the owner as recipient, the amount filled in and changeable, and the message readable, åäö
-   included. Stop there — or send 1 kr to see it arrive.
-3. If Swish rejects the number's form, `PBS_SWISH_NUMBER` is changed on the Mini and pbs restarted; the form that
-   works is noted here.
-4. Thirty-one minutes after the last change, both phones show "Inget kvitto ännu".
-5. `curl -si -X PUT https://pbs.tarnvik.com/api/protected/receipt/done` → 401.
+**Phase 7 - Done, and Swish** ✅ (2026-10-30). The owner's "Klar", allowed once everything is assigned and undone with
+"Ångra klar", locks the ticks and lets every reader pay: the `split` event then carries the payment — the payee,
+the owner's Swish number and the message — and each reader gets their own Swish button with their amount, the
+payee "Du får betalt". A reader says who they are in "Vem är du?", once per receipt. The receipt expires 30 minutes
+after its last change, number and all. On the way: four rounds of a temporary panel of Swish links, all refused
+with "felaktigt format", until it turned out that Swish cannot pay its own account and says so only that way — the
+link was right all along. Also "Slumpa" for canned receipts and `GET /api/protected/settings`. Eight decisions
+were accepted in planning (S1–S8); two were changed after trying them on a phone: four buttons in the totals card
+became each reader's own button (2026-10-30), and the payee setting stayed for a new reason. Released for the
+phone as `v0.6.1` to `v0.6.11`, then `v0.7.0`, on the canned parser. What it established is now in State, Live
+updates, The two pages, Environment variables, Look and feel and the API table; the worked step plan is in git
+history.
 
 **Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
 
