@@ -51,14 +51,14 @@ but last (phase 10).
 ## Status
 
 **Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after
-1.0 as phase 11. pbs `v0.7.4` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
+1.0 as phase 11. pbs `v0.7.5` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
 by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
 expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
 settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. Step 9.3
 is verified on a phone: deploying `v0.7.4` reloaded a page left open on `v0.7.3` by itself (the wait for an open
-dialog is covered by its code, not yet tried on a phone).
+dialog is covered by its code, not yet tried on a phone). `v0.7.5` carries step 9.4, the larger tap targets.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -956,7 +956,14 @@ Verify:
 3. With "Vem är du?" or the settings dialog open, it waits until it is closed.
 
 **9.4 Polish** — Claude, from the owner's list (T9)
-- The items the owner has gathered by then, each with a check of its own, written into this step when it starts.
+- **Tap targets at least 44 px**, the least Apple recommends: the checkbox labels (32 px before, and what is tapped
+  most), the menu items (36), the buttons on the owner's page and in the dialogs (40).
+- **The greying of a ticked row**, judged by the owner on the phone with the above; adjusted if needed.
+- The 375 px layout and the empty states: no problem known (2026-10-30), left as they are.
+
+Verify, on the phone:
+1. The boxes, the menu items and the buttons are easy to hit; the rows are taller, but not too tall.
+2. A ticked row reads as done at a glance, without looking disabled.
 
 **9.5 Release `v0.9.0`** — owner, with Claude preparing
 - `./change-version.sh 0.9.0`, push the commit and the tag, Ctrl-C and `just doit` on the Mini.

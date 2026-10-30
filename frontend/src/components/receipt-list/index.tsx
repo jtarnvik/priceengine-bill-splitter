@@ -151,7 +151,8 @@ type AssigneeBoxesProps = {
 
 /**
  * One box per person across the row's full width, `grid-cols-4`, so that the boxes line up from row to row. The
- * label is the tap target, larger than the box. A tap sends the row's whole new set of people, in the order of the
+ * label is the tap target, larger than the box, and 44 px tall: the least Apple recommends, for what is tapped most
+ * (phase 9; it was 32). A tap sends the row's whole new set of people, in the order of the
  * names — never a toggle, so that a request repeated or arriving late changes nothing it should not.
  */
 function AssigneeBoxes({ names, people, onChange, disabled }: AssigneeBoxesProps) {
@@ -165,7 +166,7 @@ function AssigneeBoxes({ names, people, onChange, disabled }: AssigneeBoxesProps
       {names.map((name) => (
         <label
           key={name}
-          className={`flex min-w-0 items-center gap-1.5 py-1.5 text-sm select-none ${disabled ? 'text-gray-400' : 'text-gray-800 cursor-pointer'}`}
+          className={`flex min-h-11 min-w-0 items-center gap-1.5 text-sm select-none ${disabled ? 'text-gray-400' : 'text-gray-800 cursor-pointer'}`}
         >
           <input
             type="checkbox"

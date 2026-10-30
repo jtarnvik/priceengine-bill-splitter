@@ -19,7 +19,7 @@ import { useLoginState } from '../hook/use-login-state';
 import { downscaleToJpeg } from '../util/downscale-image';
 
 const SECONDARY_BUTTON_CLASS =
-  'rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:bg-gray-100 cursor-pointer '
+  'rounded-md border border-gray-300 bg-white px-4 py-2.5 text-gray-800 hover:bg-gray-100 cursor-pointer '
   + 'disabled:cursor-default disabled:text-gray-400 disabled:hover:bg-white';
 
 // The owner's page, behind login.
@@ -172,7 +172,7 @@ function OwnerReceipt() {
             </button>
           ) : (
             <button
-              className="rounded-md bg-brand px-4 py-2 font-medium text-white hover:bg-brand-hover cursor-pointer disabled:cursor-default disabled:bg-brand/40"
+              className="rounded-md bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-hover cursor-pointer disabled:cursor-default disabled:bg-brand/40"
               disabled={!allAssigned || settingDone}
               onClick={() => handleDone(true)}
             >

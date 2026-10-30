@@ -6,7 +6,8 @@ import { SettingsDialog } from '../../settings-dialog';
 import { useLogoutMutation } from '../../../communication/api/auth-api';
 import { LOGIN_ROUTE, useLoginState } from '../../../hook/use-login-state';
 
-const ITEM_CLASS = 'block w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 text-sm cursor-pointer';
+// py-3: 44 px tall, the least Apple recommends for something tapped (phase 9).
+const ITEM_CLASS = 'block w-full text-left px-4 py-3 text-gray-800 hover:bg-gray-100 text-sm cursor-pointer';
 
 export function NavMenu() {
   const navigate = useNavigate();

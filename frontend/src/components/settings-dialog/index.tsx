@@ -86,7 +86,7 @@ function SettingsForm({ settings, onClose }: { settings: Settings, onClose: () =
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium">Namn</span>
         <input
-          className="rounded-md border border-gray-300 px-3 py-2"
+          className="rounded-md border border-gray-300 px-3 py-2.5"
           value={namesText}
           onChange={(event) => setNamesText(event.target.value)}
           autoCapitalize="words"
@@ -98,7 +98,7 @@ function SettingsForm({ settings, onClose }: { settings: Settings, onClose: () =
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium">Får betalt</span>
         <select
-          className="rounded-md border border-gray-300 bg-white px-3 py-2"
+          className="rounded-md border border-gray-300 bg-white px-3 py-2.5"
           value={chosenPayee}
           onChange={(event) => setPayee(event.target.value)}
         >
@@ -131,11 +131,11 @@ function SettingsForm({ settings, onClose }: { settings: Settings, onClose: () =
         <div className="flex flex-col gap-2">
           <p className="text-sm">Med nya namn töms kvittot för alla. Det går inte att ångra.</p>
           <div className="flex justify-end gap-2">
-            <button className="rounded-md px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={() => setConfirmingReset(false)}>
+            <button className="rounded-md px-4 py-2.5 hover:bg-gray-100 cursor-pointer" onClick={() => setConfirmingReset(false)}>
               Avbryt
             </button>
             <button
-              className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 cursor-pointer disabled:bg-red-300"
+              className="rounded-md bg-red-600 px-4 py-2.5 text-white hover:bg-red-700 cursor-pointer disabled:bg-red-300"
               disabled={saving}
               onClick={() => void save()}
             >
@@ -145,11 +145,11 @@ function SettingsForm({ settings, onClose }: { settings: Settings, onClose: () =
         </div>
       ) : (
         <div className="flex justify-end gap-2">
-          <button className="rounded-md px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={onClose}>
+          <button className="rounded-md px-4 py-2.5 hover:bg-gray-100 cursor-pointer" onClick={onClose}>
             Avbryt
           </button>
           <button
-            className="rounded-md bg-brand px-4 py-2 font-medium text-white hover:bg-brand-hover cursor-pointer disabled:bg-brand/40"
+            className="rounded-md bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-hover cursor-pointer disabled:bg-brand/40"
             disabled={saving}
             onClick={handleSave}
           >

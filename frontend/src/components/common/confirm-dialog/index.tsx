@@ -41,10 +41,10 @@ export function ConfirmDialog({ open, message, confirmLabel, onConfirm, onCancel
     >
       <p className="px-4 pt-4 pb-3 text-gray-800">{message}</p>
       <div className="flex justify-end gap-2 px-4 pb-4">
-        <button className="rounded-md px-4 py-2 text-gray-800 hover:bg-gray-100 cursor-pointer" onClick={onCancel}>
+        <button className="rounded-md px-4 py-2.5 text-gray-800 hover:bg-gray-100 cursor-pointer" onClick={onCancel}>
           Avbryt
         </button>
-        <button className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 cursor-pointer" onClick={onConfirm}>
+        <button className="rounded-md bg-red-600 px-4 py-2.5 text-white hover:bg-red-700 cursor-pointer" onClick={onConfirm}>
           {confirmLabel}
         </button>
       </div>
