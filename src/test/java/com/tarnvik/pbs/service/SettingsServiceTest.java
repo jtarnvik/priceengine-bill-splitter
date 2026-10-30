@@ -40,19 +40,19 @@ class SettingsServiceTest {
     assertThat(service.receiptParser()).isSameAs(claude);
   }
 
-  /** The receipt's ticks name people who may no longer be at the table. */
+  /** The receipt's ticks name people who may no longer be at the table; the dashboard repaints on every save. */
   @Test
   void update_changedNames_announceTheChange() {
     service.update(List.of("Jesper", "Anders", "Anna", "Lisa"), "Jesper", "canned");
 
-    assertThat(published).containsExactly(new NamesChangedEvent());
+    assertThat(published).containsExactly(new NamesChangedEvent(), new SettingsChangedEvent());
   }
 
   @Test
-  void update_sameNamesOtherParser_announceNothing() {
+  void update_sameNamesOtherParser_announceOnlyTheSave() {
     service.update(List.of(" Jesper", "Anders", "Anna", "Kia "), "Anna", "claude");
 
-    assertThat(published).isEmpty();
+    assertThat(published).containsExactly(new SettingsChangedEvent());
   }
 
   @Test

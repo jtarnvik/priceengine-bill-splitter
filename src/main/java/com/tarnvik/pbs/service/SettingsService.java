@@ -67,6 +67,7 @@ public class SettingsService {
     if (namesChanged) {
       eventPublisher.publishEvent(new NamesChangedEvent());
     }
+    eventPublisher.publishEvent(new SettingsChangedEvent());
     return settings;
   }
 
