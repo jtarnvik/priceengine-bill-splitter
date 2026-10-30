@@ -50,12 +50,12 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 8 not planned yet.** pbs `v0.7.0` runs on the Mini at
-`https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by the
-log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
-they do not add up to the total; the owner ticks who had what and presses "Klar"; every open page follows live,
-each reader says who they are and gets their own Swish button, and the receipt expires 30 minutes after its last
-change.
+**Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 not planned yet** — phase 8, corrections, moved after 1.0
+as phase 11. pbs `v0.7.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by
+UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and
+sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
+"Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
+expires 30 minutes after its last change.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -431,15 +431,16 @@ adjustments[]   name, amount (long, öre, negative for a discount; öresavrundni
 ```
 
 What the browser gets, `Receipt`: a `receiptId` (a UUID, new on every upload), the same fields, and an `id` per
-item. **Item ids are numbers 1, 2, 3 … in receipt order, never reused**: a row added by hand in phase 8 takes the
-next number, so an id stays valid when rows are removed, which an index would not. The list's order is the
-receipt's; the id does not define it. The friends never see the ids.
+item. **Item ids are numbers 1, 2, 3 … in receipt order, never reused**: a row added by hand (phase 11, if it
+comes) takes the next number, so an id stays valid when rows are removed, which an index would not. The list's order
+is the receipt's; the id does not define it. The friends never see the ids.
 
 ### The sum check
 
 **Compare the items plus discounts against the receipt's own total in Java, and show a warning when they
 differ.** A misread price is the error that actually matters in a bill splitter, and this catches it without
-trusting the model. The owner then corrects the row (phase 8) rather than taking a new photo.
+trusting the model. Correcting the row in the app is phase 11, after 1.0 and only if needed; until then the owner
+takes a new photo, or the table settles it aloud.
 
 Use the **pre-payment check** where possible: it carries the place and the items and nothing else — no card
 digits, and no tip to complicate the total.
@@ -489,7 +490,7 @@ The owner's page is a list: one row per item, four checkboxes per row, one per p
   together. Unassigned items count as a fifth bucket while the owner is still ticking, so the numbers always add
   up.
 - **A tip is not on the pre-payment check.** If one is ever wanted, it is a row added by hand and split through
-  the same checkboxes (phase 8).
+  the same checkboxes (phase 11, if it comes).
 
 ### The assignment request
 
@@ -548,7 +549,7 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
   upload's answer alike, goes through `setReceipt` in `live-api.ts`, so that old ticks never land on a new
   receipt's rows by item id.
 - **`split`** — who had what changed: the assignments and the totals that follow from them. Sent on every tick of
-  a checkbox, after an upload (everything unassigned), and on corrections (phase 8). It carries the `receiptId`,
+  a checkbox, after an upload (everything unassigned), and on corrections (phase 11). It carries the `receiptId`,
   so a phone that somehow holds an older receipt ignores it rather than applying ticks to the wrong rows. It holds
   every item id with its people; all four people in the configured order, each with their items and shares,
   discount share and rounded total; and the unassigned bucket's discount share and total. **The names travel in
@@ -758,7 +759,7 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 | GET | `/api/protected/settings` | Owner | How pbs is set up: so far the receipt parser; phase 9 adds the names |
 | POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
-Corrections (edit a row, add a row, remove a row) arrive with phase 8.
+Corrections (edit a row, add a row, remove a row) would arrive with phase 11, after 1.0 and only if needed.
 
 ---
 
@@ -851,7 +852,7 @@ phone as `v0.6.1` to `v0.6.11`, then `v0.7.0`, on the canned parser. What it est
 updates, The two pages, Environment variables, Look and feel and the API table; the worked step plan is in git
 history.
 
-**Phase 8 - Corrections.** Edit a row's name or price, add a row by hand (a tip, a misread item), remove a row.
+**Phase 8** — moved after 1.0, as phase 11 (decided 2026-10-30).
 
 **Phase 9 - Phone polish and settings.** Layout at 375 px, tap targets, empty states, and the small adjustments the
 owner collects while using it — among them how much a ticked row greys (lightened once in `v0.5.3`, not yet
@@ -880,6 +881,15 @@ long it took, and whether it failed.
 - *Watch:* the dashboard needs a real terminal (a TTY), so `start-pbs.sh` must keep not piping through `tee`, and
   `logback-spring.xml` must declare the console appender by a name the dashboard can detach — read
   publicbackend's "Logging" section before changing either.
+
+**`v1.0.0`** is released once phases 9 and 10 are done.
+
+### After 1.0
+
+**Phase 11 - Corrections, if needed** (moved here from phase 8, 2026-10-30). Edit a row's name or price, add a row
+by hand (a tip, a misread item), remove a row. *Why after 1.0, and only if needed:* the owner first uses pbs with
+real receipts at real dinners; the sum warning already says when a price was misread, and at the table a mistake can
+be settled aloud. Built only if those dinners show that it is missed.
 
 ---
 
