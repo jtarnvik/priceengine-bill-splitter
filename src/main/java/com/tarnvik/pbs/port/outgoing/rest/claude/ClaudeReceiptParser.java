@@ -24,7 +24,6 @@ import com.tarnvik.pbs.service.ReceiptParseException;
 import com.tarnvik.pbs.service.ReceiptParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -32,8 +31,8 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * Reads a receipt photo with Claude ({@code pbs.receipt-parser=claude}, the default), and records every parse. Adapted
- * from publicbackend's ClaudeProvider.
+ * Reads a receipt photo with Claude (the owner's setting {@code claude}), and records every parse. Adapted from
+ * publicbackend's ClaudeProvider. Always present, so its key is needed at startup in every profile.
  *
  * <p>The answer is structured output typed as {@link ParsedReceipt}: the schema is generated from that record, and
  * the instructions about each field are its descriptions there. The prompt below holds what concerns the receipt as a
@@ -41,7 +40,6 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "pbs.receipt-parser", havingValue = "claude", matchIfMissing = true)
 public class ClaudeReceiptParser implements ReceiptParser {
   // The most capable model, because a misread price is the error that matters, and at one receipt per dinner the
   // cost does not. Thinking cannot be disabled on it; effort is set explicitly rather than relying on its default.
@@ -91,6 +89,11 @@ public class ClaudeReceiptParser implements ReceiptParser {
       .maxRetries(0)
       .build();
     this.recordingProvider = recordingProvider;
+  }
+
+  @Override
+  public String name() {
+    return "claude";
   }
 
   @Override

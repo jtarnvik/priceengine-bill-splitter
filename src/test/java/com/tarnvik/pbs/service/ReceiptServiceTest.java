@@ -202,21 +202,21 @@ class ReceiptServiceTest {
     assertThat(currentSplit(service).items()).extracting("people").containsOnly(List.of());
   }
 
-  /** People are identified by first name, so two of the same could not be told apart. */
+  /** Changed names: the receipt's ticks name people who may no longer be at the table. */
   @Test
-  void constructor_sameNameTwice_fails() {
-    assertThatThrownBy(() -> service(List.of("Anna", "Anna"), "Anna", SWISH_NUMBER))
-      .isInstanceOf(IllegalStateException.class);
-  }
+  void onNamesChanged_resetsTheReceipt() {
+    ReceiptService service = serviceWithTwoItems();
 
-  @Test
-  void constructor_payeeNotAmongParticipants_fails() {
-    assertThatThrownBy(() -> service(PARTICIPANTS, "Bertil", SWISH_NUMBER)).isInstanceOf(IllegalStateException.class);
+    service.onNamesChanged(new NamesChangedEvent());
+
+    assertThat(service.currentState()).isEmpty();
+    verify(eventStreamProvider).broadcastReceipt(null);
   }
 
   @Test
   void constructor_noSwishNumber_fails() {
-    assertThatThrownBy(() -> service(PARTICIPANTS, "Jesper", " ")).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> new ReceiptService(settings(parsed(0, List.of())), eventStreamProvider, " ", EXPIRY,
+      clock)).isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -334,12 +334,23 @@ class ReceiptServiceTest {
   }
 
   private ReceiptService serviceAnswering(ParsedReceipt parsed) {
-    return new ReceiptService(jpeg -> parsed, eventStreamProvider, PARTICIPANTS, "Jesper", SWISH_NUMBER, EXPIRY,
-      clock);
+    return new ReceiptService(settings(parsed), eventStreamProvider, SWISH_NUMBER, EXPIRY, clock);
   }
 
-  private ReceiptService service(List<String> participants, String payee, String swishNumber) {
-    return new ReceiptService(jpeg -> null, eventStreamProvider, participants, payee, swishNumber, EXPIRY, clock);
+  /** The startup settings, with a canned parser that always answers with this receipt. */
+  private static SettingsService settings(ParsedReceipt parsed) {
+    ReceiptParser parser = new ReceiptParser() {
+      @Override
+      public String name() {
+        return "canned";
+      }
+
+      @Override
+      public ParsedReceipt parse(byte[] jpeg) {
+        return parsed;
+      }
+    };
+    return new SettingsService(List.of(parser), event -> { }, PARTICIPANTS, "Jesper", "canned");
   }
 
   private static Receipt currentReceipt(ReceiptService service) {

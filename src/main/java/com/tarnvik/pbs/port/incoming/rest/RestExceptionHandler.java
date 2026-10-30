@@ -1,6 +1,7 @@
 package com.tarnvik.pbs.port.incoming.rest;
 
 import com.tarnvik.pbs.port.incoming.rest.dto.ErrorMessageResponse;
+import com.tarnvik.pbs.service.InvalidSettingsException;
 import com.tarnvik.pbs.service.NotAllAssignedException;
 import com.tarnvik.pbs.service.ReceiptParseException;
 import com.tarnvik.pbs.service.SplitDoneException;
@@ -39,9 +40,9 @@ public class RestExceptionHandler {
     return new ErrorMessageResponse(e.getMessage());
   }
 
-  @ExceptionHandler(UnknownPersonException.class)
+  @ExceptionHandler({UnknownPersonException.class, InvalidSettingsException.class})
   @ResponseStatus(HttpStatus.BAD_REQUEST)
-  public ErrorMessageResponse handleUnknownPerson(UnknownPersonException e) {
+  public ErrorMessageResponse handleBadRequest(RuntimeException e) {
     return new ErrorMessageResponse(e.getMessage());
   }
 }

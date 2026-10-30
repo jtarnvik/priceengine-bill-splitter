@@ -9,6 +9,7 @@ import com.tarnvik.pbs.model.Split;
 import com.tarnvik.pbs.port.outgoing.sse.EventStreamProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
@@ -18,7 +19,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,10 +44,8 @@ public class ReceiptService {
   private static final String NOT_IN_SWISH_MESSAGE = "[^a-zA-ZåäöÅÄÖ0-9 !?(),.:;\\-]";
   private static final String DASHES = "[\\u2010-\\u2015\\u2212]";
 
-  private final ReceiptParser receiptParser;
+  private final SettingsService settingsService;
   private final EventStreamProvider eventStreamProvider;
-  private final List<String> participants;
-  private final String payee;
   private final String swishNumber;
   private final Duration expiry;
   private final Clock clock;
@@ -57,26 +55,15 @@ public class ReceiptService {
    * @param swishNumber the owner's number, from the environment: never logged, and sent to the pages only while the
    *                    split is done
    */
-  public ReceiptService(ReceiptParser receiptParser, EventStreamProvider eventStreamProvider,
-                        @Value("${pbs.participants}") List<String> participants,
-                        @Value("${pbs.payee}") String payee,
+  public ReceiptService(SettingsService settingsService, EventStreamProvider eventStreamProvider,
                         @Value("${pbs.swish-number}") String swishNumber,
                         @Value("${pbs.receipt-expiry}") Duration expiry,
                         Clock clock) {
-    if (participants.isEmpty() || new HashSet<>(participants).size() != participants.size()) {
-      // People are identified by first name, so two of the same could not be told apart.
-      throw new IllegalStateException("pbs.participants must name at least one person, each once: " + participants);
-    }
-    if (!participants.contains(payee)) {
-      throw new IllegalStateException("pbs.payee must be one of pbs.participants: " + payee);
-    }
     if (swishNumber.isBlank()) {
       throw new IllegalStateException("pbs.swish-number (PBS_SWISH_NUMBER) must be set");
     }
-    this.receiptParser = receiptParser;
+    this.settingsService = settingsService;
     this.eventStreamProvider = eventStreamProvider;
-    this.participants = List.copyOf(participants);
-    this.payee = payee;
     this.swishNumber = swishNumber.trim();
     this.expiry = expiry;
     this.clock = clock;
@@ -93,6 +80,8 @@ public class ReceiptService {
    */
   public Receipt upload(byte[] jpeg) {
     // Which parser answers, since `canned` and `claude` look alike from the page: only one costs money.
+    // The owner's setting, read per upload: switching the parser applies from the next one.
+    ReceiptParser receiptParser = settingsService.receiptParser();
     log.info("Parsing an upload of {} bytes with {}", jpeg.length, receiptParser.getClass().getSimpleName());
     ParsedReceipt parsed = receiptParser.parse(jpeg);
     if (parsed.items() == null || parsed.items().isEmpty()) {
@@ -105,8 +94,15 @@ public class ReceiptService {
         receipt.restaurantName(), receipt.linesTotal(), receipt.total());
     }
     Instant now = clock.instant();
-    replace(new ReceiptState(receipt, SplitCalculator.calculate(receipt, Map.of(), participants), now, now));
+    List<String> names = settingsService.current().names();
+    replace(new ReceiptState(receipt, SplitCalculator.calculate(receipt, Map.of(), names), now, now));
     return receipt;
+  }
+
+  /** A receipt's ticks name people who may no longer be at the table: changed names empty it, as a reset does. */
+  @EventListener
+  public void onNamesChanged(NamesChangedEvent event) {
+    reset();
   }
 
   /** Empties the receipt for every phone, not only on the owner's screen. */
@@ -123,7 +119,7 @@ public class ReceiptService {
    * @param receiptId the receipt the owner's page holds; the change is refused unless it is the current one
    * @throws StaleReceiptException when it is not, or there is no receipt
    * @throws UnknownItemException when the receipt has no such item
-   * @throws UnknownPersonException when a name is not among the participants
+   * @throws UnknownPersonException when a name is not among the owner's names
    * @throws SplitDoneException when the split is marked done: the amounts must not change under a friend paying
    */
   public synchronized void setAssignees(int itemId, UUID receiptId, List<String> people) {
@@ -134,8 +130,9 @@ public class ReceiptService {
     if (state.receipt().items().stream().noneMatch(item -> item.id() == itemId)) {
       throw new UnknownItemException(itemId);
     }
+    List<String> names = settingsService.current().names();
     for (String person : people) {
-      if (!participants.contains(person)) {
+      if (!names.contains(person)) {
         throw new UnknownPersonException(person);
       }
     }
@@ -144,8 +141,8 @@ public class ReceiptService {
       assignees.put(item.id(), item.people());
     }
     // In participant order and each once, however the request listed them.
-    assignees.put(itemId, participants.stream().filter(people::contains).toList());
-    Split split = SplitCalculator.calculate(state.receipt(), assignees, participants);
+    assignees.put(itemId, names.stream().filter(people::contains).toList());
+    Split split = SplitCalculator.calculate(state.receipt(), assignees, names);
     change(state, split);
   }
 
@@ -164,6 +161,7 @@ public class ReceiptService {
     Split.Payment payment = null;
     if (done) {
       LocalDate uploadDate = state.uploadedAt().atZone(clock.getZone()).toLocalDate();
+      String payee = settingsService.current().payee();
       payment = new Split.Payment(payee, swishNumber, swishMessage(state.receipt().restaurantName(), uploadDate));
     }
     log.info("Split marked {}", done ? "done" : "not done");

@@ -114,10 +114,33 @@ class SecurityConfigTest {
   }
 
   @Test
-  void settings_owner_getsTheParser() throws Exception {
+  void settings_owner_getsThem() throws Exception {
     mockMvc.perform(get("/api/protected/settings").with(ownerLogin()))
       .andExpect(status().isOk())
+      .andExpect(jsonPath("$.names[0]").value("Jesper"))
+      .andExpect(jsonPath("$.payee").value("Jesper"))
       .andExpect(jsonPath("$.receiptParser").value("canned"));
+  }
+
+  @Test
+  void settingsUpdate_anonymous_gets401() throws Exception {
+    mockMvc.perform(put("/api/protected/settings").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"names\": [\"A\", \"B\"], \"payee\": \"A\", \"receiptParser\": \"canned\"}"))
+      .andExpect(status().isUnauthorized());
+  }
+
+  /** Saved and answered as a whole; a refusal is 400 with its Swedish message. The defaults are put back after. */
+  @Test
+  void settingsUpdate_owner_isSavedOrRefused() throws Exception {
+    mockMvc.perform(put("/api/protected/settings").with(ownerLogin()).contentType(MediaType.APPLICATION_JSON)
+        .content("{\"names\": [\"Jesper\", \"Anders\"], \"payee\": \"Bertil\", \"receiptParser\": \"canned\"}"))
+      .andExpect(status().isBadRequest())
+      .andExpect(jsonPath("$.message").value("Den som får betalt måste vara ett av namnen."));
+    mockMvc.perform(put("/api/protected/settings").with(ownerLogin()).contentType(MediaType.APPLICATION_JSON)
+        .content("{\"names\": [\"Jesper\", \" Anders \", \"Anna\", \"Kia\", \"\"], \"payee\": \"Jesper\", "
+          + "\"receiptParser\": \"canned\"}"))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.names[1]").value("Anders"));
   }
 
   @Test

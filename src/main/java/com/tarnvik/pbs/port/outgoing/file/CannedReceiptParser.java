@@ -5,7 +5,6 @@ import com.tarnvik.pbs.service.ReceiptParseException;
 import com.tarnvik.pbs.service.ReceiptParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
@@ -14,7 +13,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Answers with the recordings instead of calling Claude ({@code pbs.receipt-parser=canned}): the next one in name
+ * Answers with the recordings instead of calling Claude (the owner's setting {@code canned}): the next one in name
  * order on every upload, starting over after the last, so that a reset and a new upload show a different receipt.
  * The answer is Claude's own JSON, so numbering, the sum check and the event run on it exactly as on a real parse.
  *
@@ -23,7 +22,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "pbs.receipt-parser", havingValue = "canned")
 public class CannedReceiptParser implements ReceiptParser {
   private final RecordingProvider recordingProvider;
   private final Duration delay;
@@ -33,6 +31,11 @@ public class CannedReceiptParser implements ReceiptParser {
                              @Value("${pbs.canned-parser-delay:1s}") Duration delay) {
     this.recordingProvider = recordingProvider;
     this.delay = delay;
+  }
+
+  @Override
+  public String name() {
+    return "canned";
   }
 
   @Override
