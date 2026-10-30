@@ -51,13 +51,13 @@ but last (phase 10).
 ## Status
 
 **Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after
-1.0 as phase 11. pbs `v0.7.3` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
+1.0 as phase 11. pbs `v0.7.4` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
 by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
 expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
 settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. `v0.7.3`
-carries step 9.3, reloading a page on a new version.
+carries step 9.3, reloading a page on a new version; `v0.7.4`, otherwise the same, is the new version to reload on.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
