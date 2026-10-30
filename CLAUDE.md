@@ -168,7 +168,7 @@ What pbs itself must get right:
   - **Every entry starts with a timestamp.** Lines without one, such as stack-trace lines, are attached to the
     entry before them, which is how a stack trace stays one entry. Boot does this already.
 
-  The newest lines can reach Grafana late — see "After the project". Nothing is lost.
+  Lines reach Grafana within seconds. Until 2026-10-30 they could be hours late — see "After the project".
 
 ## Authentication
 
@@ -931,28 +931,10 @@ be settled aloud. Built only if those dinners show that it is missed.
 
 Things found along the way that belong to something other than pbs, to fix once the phases are done.
 
-### Log-retention lag — Docker Desktop's file sharing
+### Log-retention lag — fixed 2026-10-30
 
-**Found while joining the log-retention stack in phase 1, 2026-10-25.** Lines reach Grafana, but sometimes
-tens of minutes or hours late — pbs's startup lines took about three hours, and publicbackend's lines were more
-than 20 minutes behind on the same day. Nothing is lost. The lines hit hardest are the last ones before a
-service goes quiet, which are the ones wanted after a crash.
-
-**Cause, established by experiment.** Alloy runs in a container and reads the logs through Docker Desktop's
-file sharing. For a log file that a host process keeps open and appends to, while Alloy holds it open inside the
-container, the container's view of the file can stay stale: its size and modification time freeze, and Alloy
-cannot read what the container does not see. Alloy itself delivers everything the container sees — Grafana
-stopped exactly where the container's view of the file stopped. A fresh file, appended to with `echo` and read
-with a new `ls` each time, showed the change within a second, so the sharing is not slow in general.
-
-*A misleading signal:* Alloy's `positions.yml` lags behind what has been delivered, so it is no measure of how
-far Alloy has got. Compare the file's size on the host with its size inside the container instead.
-
-**Fix, to be decided.** It belongs to the log-retention stack and the manual, not to pbs:
-- **Run Alloy natively on the Mini (Homebrew)** instead of in Docker — the preferred option, since it removes
-  file sharing from the log path entirely.
-- Or switch Docker Desktop's file-sharing implementation (Settings → General) and test again. Cheaper, but it
-  replaces one layer with another.
-
-Either way, the check afterwards is the one that found it: append a line to a service's log on the host, and
-see it in the container (`ls -l` on both sides) and in Grafana within seconds — repeatedly, over an afternoon.
+**Found while joining the log-retention stack in phase 1, 2026-10-25:** lines reached Grafana tens of minutes or
+hours late — pbs's startup lines took about three hours. The cause was Docker Desktop's file sharing, through which
+the containerised Alloy read the logs. **Fixed by running Alloy natively on the Mini (Homebrew)**, with Loki and
+Grafana left in Docker. The cause, the move and how to run the stack now are in the manual, "Log retention" (its
+"History" subsection for the story); nothing of it belongs in this repository.
