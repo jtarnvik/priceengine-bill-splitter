@@ -934,6 +934,11 @@ judged). And a settings page for the owner (added 2026-10-29):
   Both parsers then exist at once, where today `pbs.receipt-parser` creates only one.
 - *To decide when planned:* where the settings live. There is no database, and settings lost on every restart
   would bring the property's value back each time.
+- **A page left open runs the old app after a deploy** (found 2026-10-30: a fix looked missing in a Safari tab until
+  the tab was reopened). pbs is one page that never reloads, and its stream reconnects without reloading, so a
+  friend's phone that has had the page open since the last dinner runs old code against a new server. *To decide
+  when planned:* the server tells each page its version on connect, and a page holding another version reloads
+  itself — at a moment that interrupts nothing, such as with no dialog open.
 
 ### Operations
 
