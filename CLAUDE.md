@@ -50,21 +50,19 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after
-1.0 as phase 11. pbs `v0.7.5` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
-by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
-and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
+**Phases 1 to 7 and 9 done (2026-10-25 to 2026-10-30); phase 10 not planned yet** — phase 8 moved after 1.0 as
+phase 11. pbs `v0.9.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by
+UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and
+sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
-expires 30 minutes after its last change. Steps 9.1 to 9.4 are verified on a phone: the owner's settings — names,
-payee, parser — in a dialog; a page left open reloading itself on a new version (deploying `v0.7.4` reloaded one
-left on `v0.7.3`; the wait for an open dialog is covered by its code, not yet tried on a phone); and tap targets of
-44 px. `v0.7.2` also fixed a failed send breaking off a broadcast.
+expires 30 minutes after its last change. The owner sets the names, the payee and the parser in the app, and a page
+left open reloads itself after a deploy.
 
-**Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
-`v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
-were built and tested on it (decided 2026-10-29), the canned receipts being all there is to test with until a
-dinner. **The real dinner test is still to come**, once production parses with Claude again: remove that line, or
-use phase 9's switch in the app.
+**Production starts on the canned parser** (`pbs.receipt-parser=canned`, the default in every profile until 1.0),
+answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 to 9 were built and tested on
+it, the canned receipts being all there is to test with until a dinner. **The real dinner test is still to come**:
+switch to "Claude" in the app's settings before the receipt is photographed — after every restart, since the
+setting lives in memory until 1.0 makes `claude` the default.
 
 The design below was worked out in one discussion (October 2026) before the repository existed. Treat it as decided
 unless a step proves it wrong, and "Phases, in order" as the plan. Remove planning text from this file as it is
@@ -94,9 +92,9 @@ recordings of parses (see Recording and canned responses).
 
 - **No database.** All state is in memory and lost on restart, which is accepted: a split lives for one dinner.
 - **One receipt at a time.** Uploading a new one replaces the old.
-- **The four people are hardcoded**, first names only, in `application.properties`: Jesper, Anders, Anna and
-  Kia. The owner will change them in the app (phase 9). The browser therefore gets them from the backend (in the
-  `split` event) rather than having them built in.
+- **Four people by default**, first names only, in `application.properties`: Jesper, Anders, Anna and Kia. The
+  owner changes them in the app's settings — two to four, each once — until the next restart (phase 9). The browser
+  therefore gets them from the backend (in the `split` event) rather than having them built in.
 - **The repository is public.** Nothing in it may identify the owner beyond what a first name does: the allowed
   Google email, the client secret and the Anthropic key all come from the environment.
 
@@ -457,10 +455,12 @@ digits, and no tip to complicate the total.
   `recordings/` in the project root in development, `deployment/recordings/` on the Mini. Both gitignored.
 - **Production records too.** Real receipts come from dinners; the owner copies recordings from the Mini to the dev
   machine to develop against them.
-- **`pbs.receipt-parser=claude|canned`**, `claude` by default. The canned parser answers with the recordings in
-  name order, a different one per upload, so that reset and a new upload show a new receipt, after a second's
-  pause, so that the waiting state can be seen. It reads only the `*.json` directly in the folder, not in
-  subfolders. `local` uses `canned`; switched to `claude` it makes new recordings with the development key.
+- **`claude` or `canned`, switched in the app's settings** (phase 9). Both parsers always exist, and the setting picks
+  one per upload, so the Claude parser needs `ANTHROPIC_API_KEY` at startup in every profile. `pbs.receipt-parser`
+  is the parser at startup: `canned` in every profile until 1.0, which makes it `claude`. The canned parser answers
+  with the recordings in name order, a different one per upload, so that reset and a new upload show a new receipt,
+  after a second's pause, so that the waiting state can be seen. It reads only the `*.json` directly in the folder,
+  not in subfolders. Switched to `claude` in development, it makes new recordings with the development key.
 - The canned parser reads the same `ParsedReceipt` JSON that Claude answered, so numbering, the sum check and the
   event run on it exactly as on a real parse.
 - **Real recordings are not committed.** The repository is public, and a folder of receipts says where the owner
@@ -701,8 +701,12 @@ stack, so its files are the reference (see Reference implementations).
   anyone wonders why nothing changes.
 
 **"Inställningar"** — for the logged-in owner, in the header menu, a dialog over whatever page is shown (phase 9):
-the names in one field, comma separated; who gets paid, among them; and the parser, "Inspelade kvitton" or
-"Claude". Saved as a whole; with a receipt loaded, changed names ask first, since they empty it for everyone.
+the names in one field, comma separated — the server trims each and drops empty ones; two to four, each once,
+ignoring case — who gets paid, among them, falling back to the first name; and the parser, "Inspelade kvitton" or
+"Claude". Saved as a whole (`PUT /api/protected/settings`). Changed names empty the receipt for everyone — its ticks
+name people who may no longer be at the table — so with a receipt loaded they ask first; switching the parser
+applies to the next upload and resets nothing. *In memory:* a restart brings back the properties. *Why the payee
+is in the dialog:* a rename could otherwise leave a payee who is no longer one of the people.
 
 **`/#/upload` — the owner, behind login.** Upload, the parsed rows with their checkboxes, the sum-check warning,
 reset, and later corrections. It draws the receipt from the stream like the public page, so a reload mid-dinner
@@ -749,6 +753,8 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
   ellipsis, keeping the menu button on the bar. On the right a hamburger button opening a white dropdown menu,
   closed by a click outside it: "Logga in" when logged out; "Ladda upp kvitto" and "Logga ut" when logged in —
   the first so that the owner can get back to `/#/upload` from the public page.
+- **Tap targets at least 44 px** (phase 9), the least Apple recommends: the checkbox labels, tapped most, the menu
+  items and the buttons.
 - **Pages**: white background, content in sl-dashboard's very slightly grey card (`bg-[#F1F2F3]`, gray-200
   border, `rounded-lg`, `shadow-sm`).
 - **The header is green where sl-dashboard's is blue** (`#2870f0`). *Not* the same hue-swapped HSL values: at
@@ -771,7 +777,8 @@ sl-dashboard's is ("Logga in", "Inget kvitto ännu"); only the app's name is Eng
 | DELETE | `/api/protected/receipt` | Owner | Reset: no receipt, broadcast to every phone |
 | PUT | `/api/protected/items/{id}/assignees` | Owner | The full set of people for one row; 409 on a stale `receiptId` |
 | PUT | `/api/protected/receipt/done` | Owner | Done or not, as a whole state (phase 7); 409 if stale or something is left |
-| GET | `/api/protected/settings` | Owner | How pbs is set up: so far the receipt parser; phase 9 adds the names |
+| GET | `/api/protected/settings` | Owner | The owner's settings: names, payee, parser (phase 9) |
+| PUT | `/api/protected/settings` | Owner | The settings as a whole; 400 with a Swedish message if they will not do |
 | POST | `/logout` | Owner | Ends the session; 200, not a redirect |
 
 Corrections (edit a row, add a row, remove a row) would arrive with phase 11, after 1.0 and only if needed.
@@ -869,109 +876,15 @@ history.
 
 **Phase 8** — moved after 1.0, as phase 11 (decided 2026-10-30).
 
-**Phase 9 - Phone polish and settings.** Layout at 375 px, tap targets, empty states, and the small adjustments the
-owner collects while using it — among them how much a ticked row greys (lightened once in `v0.5.3`, not yet
-judged). And the owner's settings, decided 2026-10-30:
-- **A settings dialog for the logged-in owner**, for what is rarely changed: **the names**, as one text field,
-  comma separated, each name trimmed after the split; and **a switch between the `canned` and `claude` parsers**.
-- **Changing the names resets the receipt** — whatever is loaded is removed, as by "Återställ". Names are meant to be
-  set before an upload, not during a split.
-- **Which parser answers is shown under the upload button**, small and grey like "Återansluter …".
-- **The settings live in memory.** A restart brings back the names from `application.properties` and the `canned`
-  parser. *Note for 1.0:* the default becomes `claude` (see `v1.0.0` below).
-- **A page left open on an old version reloads itself.** pbs is one page that never reloads, and its stream
-  reconnects without reloading, so a friend's phone that has had the page open since the last dinner runs old code
-  against a new server (found 2026-10-30: a fix looked missing in a Safari tab until the tab was reopened). The
-  server tells each page its version on connect; a page that sees another version than the one it started with
-  reloads, at a moment that interrupts nothing.
-
-#### Phase 9 — step by step
-
-Planned 2026-10-30 by Claude from the owner's decisions above; the decisions below, T1–T9, were accepted by the
-owner the same day, and move into the design as the steps are done.
-
-*Decisions:*
-- **T1. "Inställningar" in the header menu**, for the logged-in owner, opening the dialog over whatever page is shown.
-  *Why a dialog, not a page:* it is changed seldom and briefly, and the owner should land back where they were.
-- **T2. Two to four names, each once.** Empty pieces from stray commas are dropped; the same name twice, ignoring
-  case, is refused. *Why at most four:* the owner's checkbox line and the totals grid are laid out for four.
-- **T3. The payee is chosen in the same dialog**, among the names entered, defaulting to `pbs.payee` when it is among
-  them and to the first name otherwise. *Why:* renaming could otherwise leave a payee who is no longer one of the
-  people, and the Swish buttons need one.
-- **T4. The dialog warns before a reset:** when a receipt is loaded and the names change, saving asks first, as
-  "Återställ" does. Unchanged names reset nothing; switching the parser never does — it applies to the next upload.
-- **T5. One endpoint, whole state:** `GET` and `PUT /api/protected/settings` with names, payee and parser, the `PUT`
-  validated as in T2 and T3 and answered with the saved settings. The names still reach the pages through the
-  `split` event, so a rename shows up with the next receipt.
-- **T6. Both parsers always exist**, and the service asks the setting which one answers. The Claude parser then needs
-  its key at startup in every profile; the test profile gets a made-up one, and no test calls the API.
-- **T7. The default parser is `canned` in every profile for now**, the property set once in
-  `application.properties`; the overrides in `local` and `production` go.
-- **T8. The version as an event:** `event: version` with the build's version, the first event on every connect. A
-  page keeps the version of its first connect; a later connect announcing another one reloads the page — at once
-  if nothing is in progress, otherwise once the dialog closes or the upload ends. The version comes from the
-  server's build: `pbs.version=@project.version@`, filled in by Maven (in place of `build-info` as first planned:
-  the Spring Boot parent pom already filters `application*.properties`, so no plugin goal is needed).
-- **T9. The polish is a list the owner gathers**, worked through in one step at the end, each item small: the
-  greying, what 375 px shows, tap targets, empty states.
-
-**9.1 Settings — backend** — Claude ✅
-- A `SettingsService` holding names, payee and parser in memory, from `pbs.participants`, `pbs.payee` and
-  `pbs.receipt-parser` at startup. `ReceiptService` asks it for the names and the payee instead of holding them;
-  both parsers exist, and the setting picks one per upload (T6, T7).
-- `GET` and `PUT /api/protected/settings` (T5). A changed name list resets the receipt and broadcasts it.
-- Tests: names split and trimmed, empty pieces dropped, two to four, a duplicate refused; a payee not among the names
-  refused; a changed list resetting the receipt, an unchanged one not; the parser chosen per upload; the default
-  `canned`; anonymous `GET` and `PUT` → 401.
-
-Verify, on the dev machine:
-1. `mvn verify` → `BUILD SUCCESS`.
-2. Logged in, the cookie copied from DevTools: `GET …/settings` shows the four names, Jesper as payee and `canned`.
-3. A `PUT` with the names `["Jesper", " Anders ", "Anna", "  Kia", ""]` — what the dialog sends after splitting the
-   field on commas — saves four trimmed names; with a receipt loaded, the stream shows `{"receipt":null}` after a
-   `PUT` that changes a name, and nothing after one that does not.
-4. With `claude`, the next upload logs `ClaudeReceiptParser`; with `canned`, `CannedReceiptParser`.
-
-**9.2 The settings dialog — frontend** — Claude ✅
-- The client regenerated. "Inställningar" in the menu when logged in (T1); the dialog with the names field, the
-  payee among them (T3), the parser as two choices, "Spara" and "Avbryt"; the warning before a reset (T4); refusals
-  shown as the server words them.
-- Under the upload button, small and grey: which parser answers.
-
-Verify, logged in, at 375 px:
-1. The menu has "Inställningar"; the dialog shows the current settings.
-2. Changing a name with a receipt loaded asks first; confirmed, the receipt is gone on every page, and the next
-   receipt's boxes carry the new names.
-3. Five names, or the same name twice, are refused with a Swedish message, and nothing changes.
-4. Switching the parser changes the line under the upload button, and the next upload uses it.
-
-**9.3 Reload on a new version** — Claude ✅
-- `pbs.version=@project.version@`; `event: version` first on every connect (T8); the page keeps its first version
-  and reloads on another, waiting while a dialog is open or a request is under way (`use-reload-on-new-version.ts`).
-
-Verify:
-1. `curl -sN localhost:8082/api/public/events` starts with `event:version` and the pom's version.
-2. With a page open, the backend restarted from a build of another version (the pom's version changed locally and
-   not committed, `mvn verify`, the new jar started): the page reloads by itself once the stream reconnects.
-3. With "Vem är du?" or the settings dialog open, it waits until it is closed.
-
-**9.4 Polish** — Claude, from the owner's list (T9) ✅
-- **Tap targets at least 44 px**, the least Apple recommends: the checkbox labels (32 px before, and what is tapped
-  most), the menu items (36), the buttons on the owner's page and in the dialogs (40).
-- **The greying of a ticked row**, judged by the owner on the phone with the above; adjusted if needed.
-- The 375 px layout and the empty states: no problem known (2026-10-30), left as they are.
-
-Verify, on the phone:
-1. The boxes, the menu items and the buttons are easy to hit; the rows are taller, but not too tall.
-2. A ticked row reads as done at a glance, without looking disabled.
-
-**9.5 Release `v0.9.0`** — owner, with Claude preparing
-- `./change-version.sh 0.9.0`, push the commit and the tag, Ctrl-C and `just doit` on the Mini.
-
-Verify:
-1. The startup log says `Starting PbsApplication v0.9.0`.
-2. On the phone: the settings dialog works; a phone left on the public page from before the deploy reloads by itself.
-3. `curl -si https://pbs.tarnvik.com/api/protected/settings` → 401.
+**Phase 9 - Phone polish and settings** ✅ (2026-10-30). The owner's settings in a dialog — the names, the payee
+among them, and the parser — in memory, a rename resetting the receipt; both parsers always present, `canned` the
+default until 1.0. A page left open reloads itself when the server announces a new version, which a stale Safari tab
+had shown to be needed. Tap targets of at least 44 px; the greying of ticked rows judged and kept. On the way, a
+failed send that broke off the whole broadcast was found in the log and fixed (`v0.7.2`). Nine decisions were made
+in planning and accepted by the owner (T1–T9); the version came from a filtered property rather than `build-info`.
+Released for the phone as `v0.7.1` to `v0.7.5`, then `v0.9.0`. What it established is now in Purpose, Recording and
+canned responses, Live updates, The two pages, Look and feel and the API table; the worked step plan is in git
+history.
 
 ### Operations
 
