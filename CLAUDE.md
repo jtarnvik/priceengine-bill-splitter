@@ -661,11 +661,12 @@ stack, so its files are the reference (see Reference implementations).
   in the header's green with the names on white buttons (in white it looked colourless).
 - **When the split is done, each reader gets their own Swish button** (decided 2026-10-30, replacing four buttons
   in the totals card): "Att betala till <payee>" and the reader's total on the left, and on the right a white
-  button with the stacked Swish logo, as tall as the card, in the card where the items left to split were. That card keeps the same minimum height whether it shows "Allt är fördelat" or the button,
-  and the totals card does not change at all, so pressing "Klar" moves nothing. The payee sees "Du får betalt", a
-  reader with nothing to pay "Du har inget att betala". *Why `pbs.payee` is still needed:* a payee who chooses
-  their own name would otherwise get a button to pay themselves, which Swish refuses as "felaktigt format", and
-  "logged in means payee" fails on a second device. The link is built in the browser, each parameter with
+  button with the stacked Swish logo, as tall as the card, in the card where the items left to split were. That
+  card keeps the same minimum height whether it shows "Allt är fördelat" or the button, and the totals card does
+  not change at all, so pressing "Klar" moves nothing. The payee sees "Du får betalt", a reader with nothing to pay
+  "Du har inget att betala". *Why `pbs.payee` is still needed:* a payee who chooses their own name would otherwise
+  get a button to pay themselves, which Swish refuses as "felaktigt format", and "logged in means payee" fails on a
+  second device. The link is built in the browser, each parameter with
   `encodeURIComponent` — not `URLSearchParams`, which writes a space as `+`. The message, built on the server, is
   "<restaurant> <date of the upload>" within Swish's set — a–ö, 0–9, space and `!?(),.-:;` — accents dropped except
   on å, ä and ö, dashes made plain, anything else a space, cut to 50.
