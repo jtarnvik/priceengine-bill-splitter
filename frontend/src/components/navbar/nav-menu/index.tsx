@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RxHamburgerMenu } from 'react-icons/rx';
 
+import { SettingsDialog } from '../../settings-dialog';
 import { useLogoutMutation } from '../../../communication/api/auth-api';
 import { LOGIN_ROUTE, useLoginState } from '../../../hook/use-login-state';
 
@@ -12,6 +13,7 @@ export function NavMenu() {
   const loginState = useLoginState();
   const [logout] = useLogoutMutation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +49,9 @@ export function NavMenu() {
               <button className={ITEM_CLASS} onClick={() => { navigate('/upload'); setMenuOpen(false); }}>
                 Ladda upp kvitto
               </button>
+              <button className={ITEM_CLASS} onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}>
+                Inställningar
+              </button>
               <button className={ITEM_CLASS} onClick={handleLogout}>
                 Logga ut
               </button>
@@ -59,6 +64,8 @@ export function NavMenu() {
           )}
         </div>
       )}
+      {/* Over whatever page is shown, so that the owner lands back where they were. */}
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

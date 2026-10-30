@@ -131,7 +131,19 @@ function OwnerReceipt() {
     <View>
       <Card>
         {receipt === undefined && <p className="py-2 text-gray-500">Hämtar kvittot …</p>}
-        {receipt === null && <UploadButton busy={preparing || uploading} onFileChosen={handleFileChosen} />}
+        {receipt === null && (
+          <>
+            <UploadButton busy={preparing || uploading} onFileChosen={handleFileChosen} />
+            {/* Which parser answers, since the two look alike from here and only one costs money. */}
+            {settings && (
+              <p className="pb-2 text-xs text-gray-500">
+                {settings.receiptParser === 'canned'
+                  ? 'Inspelade kvitton: Claude anropas inte. Byt i Inställningar.'
+                  : 'Claude läser kvittot.'}
+              </p>
+            )}
+          </>
+        )}
         {receipt && (
           <>
             <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>

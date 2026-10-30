@@ -1,11 +1,26 @@
 import { pbsApi as api } from "./base-api";
-export const addTagTypes = ["receipt", "split", "settings", "auth"] as const;
+export const addTagTypes = ["settings", "receipt", "split", "auth"] as const;
 const injectedRtkApi = api
   .enhanceEndpoints({
     addTagTypes,
   })
   .injectEndpoints({
     endpoints: (build) => ({
+      getSettings: build.query<GetSettingsApiResponse, GetSettingsApiArg>({
+        query: () => ({ url: `/api/protected/settings` }),
+        providesTags: ["settings"],
+      }),
+      updateSettings: build.mutation<
+        UpdateSettingsApiResponse,
+        UpdateSettingsApiArg
+      >({
+        query: (queryArg) => ({
+          url: `/api/protected/settings`,
+          method: "PUT",
+          body: queryArg.settingsRequest,
+        }),
+        invalidatesTags: ["settings"],
+      }),
       setReceiptDone: build.mutation<
         SetReceiptDoneApiResponse,
         SetReceiptDoneApiArg
@@ -45,10 +60,6 @@ const injectedRtkApi = api
           invalidatesTags: ["receipt"],
         },
       ),
-      getSettings: build.query<GetSettingsApiResponse, GetSettingsApiArg>({
-        query: () => ({ url: `/api/protected/settings` }),
-        providesTags: ["settings"],
-      }),
       getMe: build.query<GetMeApiResponse, GetMeApiArg>({
         query: () => ({ url: `/api/auth/me` }),
         providesTags: ["auth"],
@@ -57,6 +68,12 @@ const injectedRtkApi = api
     overrideExisting: false,
   });
 export { injectedRtkApi as generatedApi };
+export type GetSettingsApiResponse = /** status 200 OK */ Settings;
+export type GetSettingsApiArg = void;
+export type UpdateSettingsApiResponse = /** status 200 OK */ Settings;
+export type UpdateSettingsApiArg = {
+  settingsRequest: SettingsRequest;
+};
 export type SetReceiptDoneApiResponse = unknown;
 export type SetReceiptDoneApiArg = {
   doneRequest: DoneRequest;
@@ -74,12 +91,20 @@ export type UploadReceiptApiArg = {
 };
 export type ResetReceiptApiResponse = unknown;
 export type ResetReceiptApiArg = void;
-export type GetSettingsApiResponse = /** status 200 OK */ SettingsResponse;
-export type GetSettingsApiArg = void;
 export type GetMeApiResponse = /** status 200 OK */ MeResponse;
 export type GetMeApiArg = void;
+export type Settings = {
+  names: string[];
+  payee: string;
+  receiptParser: string;
+};
 export type ErrorMessageResponse = {
   message: string;
+};
+export type SettingsRequest = {
+  names: string[];
+  payee: string;
+  receiptParser: string;
 };
 export type DoneRequest = {
   receiptId: string;
@@ -110,17 +135,15 @@ export type Receipt = {
   linesTotal: number;
   totalMatches: boolean;
 };
-export type SettingsResponse = {
-  receiptParser: string;
-};
 export type MeResponse = {
   email: string;
 };
 export const {
+  useGetSettingsQuery,
+  useUpdateSettingsMutation,
   useSetReceiptDoneMutation,
   useSetItemAssigneesMutation,
   useUploadReceiptMutation,
   useResetReceiptMutation,
-  useGetSettingsQuery,
   useGetMeQuery,
 } = injectedRtkApi;

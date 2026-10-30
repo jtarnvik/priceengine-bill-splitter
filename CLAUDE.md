@@ -50,12 +50,13 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after 1.0
-as phase 11. pbs `v0.7.0` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by
-UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt and
-sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
+**Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after
+1.0 as phase 11. pbs `v0.7.1` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
+by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
+and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
-expires 30 minutes after its last change.
+expires 30 minutes after its last change. `v0.7.1` carries steps 9.1 and 9.2, released to be verified on a phone:
+the owner's settings — names, payee, parser — in a dialog.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -689,11 +690,15 @@ stack, so its files are the reference (see Reference implementations).
   quick reconnect after a phone is unlocked never flashes it, and a page that is really cut off says so before
   anyone wonders why nothing changes.
 
+**"Inställningar"** — for the logged-in owner, in the header menu, a dialog over whatever page is shown (phase 9):
+the names in one field, comma separated; who gets paid, among them; and the parser, "Inspelade kvitton" or
+"Claude". Saved as a whole; with a receipt loaded, changed names ask first, since they empty it for everyone.
+
 **`/#/upload` — the owner, behind login.** Upload, the parsed rows with their checkboxes, the sum-check warning,
 reset, and later corrections. It draws the receipt from the stream like the public page, so a reload mid-dinner
 keeps it.
 - **Without a receipt:** one large, rounded, green button in the iOS manner, with a camera icon (see In the
-  browser, before upload). While the parse runs it says "Läser kvittot…" and cannot be tapped; a failure shows a
+  browser, before upload), and under it, small and grey, which parser answers. While the parse runs it says "Läser kvittot…" and cannot be tapped; a failure shows a
   message in Swedish and the button again.
 - **With a receipt:** the restaurant, the rows, and a footer — "Totalt" and, from phase 6, "Kvar att dela på",
   which falls as items are ticked. Then (phase 7) "Klar", enabled once nothing is left, and while done "Ångra klar"
