@@ -114,17 +114,31 @@ export function ReceiptList({ receipt, footer, greet = false, assignment }: Prop
           </div>
         ))}
       </div>
-      {!receipt.totalMatches && (
-        <p
-          role="alert"
-          className={`mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900${footerGreeting.className}`}
-          style={footerGreeting.style}
-        >
-          Raderna blir {formatKronor(receipt.linesTotal)}, men kvittot säger {formatKronor(receipt.total)}.
-          Jämför priserna med kvittot.
-        </p>
-      )}
+      <SumWarning receipt={receipt} className={footerGreeting.className} style={footerGreeting.style} />
     </div>
+  );
+}
+
+type SumWarningProps = {
+  receipt: Receipt,
+  className?: string,
+  style?: CSSProperties
+}
+
+/** When the lines do not add up to the receipt's total, a price was most likely misread. Nothing when they do. */
+export function SumWarning({ receipt, className = '', style }: SumWarningProps) {
+  if (receipt.totalMatches) {
+    return null;
+  }
+  return (
+    <p
+      role="alert"
+      className={`mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900${className}`}
+      style={style}
+    >
+      Raderna blir {formatKronor(receipt.linesTotal)}, men kvittot säger {formatKronor(receipt.total)}.
+      Jämför priserna med kvittot.
+    </p>
   );
 }
 

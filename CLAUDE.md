@@ -50,7 +50,7 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.7` runs on
+**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.8` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
@@ -58,7 +58,8 @@ shows each person's total and items. Steps 7.2 and 7.3 are verified on a phone �
 receipt expiring 30 minutes after its last change — and the Swish link, once tried with another person's number:
 from the owner's own phone it can only fail (see The two pages). Four rounds of a temporary test panel found that;
 the panel is gone, and the real button's link was right all along. The owner's number is back in
-`PBS_SWISH_NUMBER`.
+`PBS_SWISH_NUMBER`. Added since: "Slumpa" for canned receipts (`v0.6.7`), and "Vem är du?" with each reader's own
+Swish button (`v0.6.8`).
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -652,9 +653,18 @@ stack, so its files are the reference (see Reference implementations).
   name settings could make wrong); the items left to split with "Kvar att
   dela på"; one section per person with their items. *Why:* the number each friend wants first, the list being
   worked through next, the detail for checking last.
-- **When the split is done, the totals card becomes the payment card** (phase 7, decided 2026-10-29, *to be tried
-  at the table*): one row per person with the total and a Swish button, the payee's row saying "Får betalt"
-  instead. The payee is `pbs.payee`, one of the participants. The link is built in the browser, each parameter with
+- **"Vem är du?"** (decided 2026-10-30): when a receipt arrives, a dialog asks the reader which of the people at
+  the table they are, one button per name, and cannot be closed without choosing. Not a login, nothing is checked —
+  we are all friends. Kept in `localStorage` with the receipt's id (`use-me.ts`): a reload, a reconnect or an
+  unlocked phone does not ask again for the same receipt, the next one does, last time's name marked. The chosen
+  name is bold in the totals card; a tap on it asks again, should the wrong name have been tapped.
+- **When the split is done, each reader gets their own Swish button** (decided 2026-10-30, replacing four buttons
+  in the totals card): "Att betala till <payee>", the reader's total and the button, in the card where the items
+  left to split were. That card keeps the same minimum height whether it shows "Allt är fördelat" or the button,
+  and the totals card does not change at all, so pressing "Klar" moves nothing. The payee sees "Du får betalt", a
+  reader with nothing to pay "Du har inget att betala". *Why `pbs.payee` is still needed:* a payee who chooses
+  their own name would otherwise get a button to pay themselves, which Swish refuses as "felaktigt format", and
+  "logged in means payee" fails on a second device. The link is built in the browser, each parameter with
   `encodeURIComponent` — not `URLSearchParams`, which writes a space as `+`. The message, built on the server, is
   "<restaurant> <date of the upload>" within Swish's set — a–ö, 0–9, space and `!?(),.-:;` — accents dropped except
   on å, ä and ö, dashes made plain, anything else a space, cut to 50.
@@ -846,7 +856,8 @@ Planned 2026-10-29 by Claude from the design above and the owner's two decisions
 eight decisions, S1–S8, were accepted by the owner the same day, S1, S2 and S6 to be tried at the table, and are now
 in the design: S1 the expiry from the last change and S2 "Klar" only when everything is assigned, ticks locked
 while done (State); S3 done as a whole state (State, API); S4 done and the payment in the `split` event (Live
-updates); S5 the payee configured, S6 the payment card, S7 the message on the server and the link in the browser
+updates); S5 the payee configured, S6 the payment card (replaced 2026-10-30 by each reader's own button, see The two
+pages), S7 the message on the server and the link in the browser
 (The two pages); S8 the number as written, its form checked on a phone in 7.4.
 
 **7.1 The number and the logo** — owner, Claude walking through ✅

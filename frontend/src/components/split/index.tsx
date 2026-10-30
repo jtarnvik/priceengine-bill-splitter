@@ -16,16 +16,30 @@ type Props = {
   split: Split
 }
 
+type TotalsProps = Props & {
+  /** The name this reader chose in "Vem är du?", in bold; null until chosen. */
+  me: string | null,
+  /** A tap on the bold name: to choose again, should the wrong name have been tapped. */
+  onChangeMe: () => void
+}
+
 /**
- * Each person's total, two by two, and the drift line under them, while the owner is still ticking.
+ * Each person's total, two by two, the reader's own name in bold, and the drift line under them. The same before
+ * and after "Klar", so that nothing moves when the split is done.
  */
-export function SplitTotals({ receipt, split }: Props) {
+export function SplitTotals({ receipt, split, me, onChangeMe }: TotalsProps) {
   return (
     <div className="pb-2">
       <div className="grid grid-cols-2 gap-x-6 gap-y-1">
         {split.people.map((person) => (
           <div key={person.name} className={LINE_CLASS}>
-            <span className="truncate">{person.name}</span>
+            {person.name === me ? (
+              <button className="truncate text-left font-bold cursor-pointer" aria-label="Byt person" onClick={onChangeMe}>
+                {person.name}
+              </button>
+            ) : (
+              <span className="truncate">{person.name}</span>
+            )}
             <span className={`${AMOUNT_CLASS} font-medium`}>{formatWholeKronor(person.total)}</span>
           </div>
         ))}
@@ -35,28 +49,34 @@ export function SplitTotals({ receipt, split }: Props) {
   );
 }
 
+type YourPaymentProps = {
+  split: Split,
+  payment: Payment,
+  me: string
+}
+
 /**
- * Once the owner has pressed "Klar", the totals become this: one row per person with the total and a Swish button
- * that opens the app with the payment filled in. The payee, who paid the bill, gets none.
+ * Once the owner has pressed "Klar": what this reader owes and a Swish button that opens the app with it filled in.
+ * Only the reader's own, where the list of items left to split was. The payee gets no button — Swish cannot pay its
+ * own account, and says so only with "felaktigt format".
  */
-export function SplitPayment({ receipt, split, payment }: Props & { payment: Payment }) {
+export function YourPayment({ split, payment, me }: YourPaymentProps) {
+  const total = split.people.find((person) => person.name === me)?.total ?? 0;
+  if (me === payment.payee) {
+    return <p className="pt-2">Du får betalt.</p>;
+  }
+  if (total <= 0) {
+    return <p className="pt-2">Du har inget att betala.</p>;
+  }
   return (
-    <div className="pb-2">
-      <ul>
-        {split.people.map((person) => (
-          // A fixed third column, so that the totals line up whether a row has a button or not.
-          <li key={person.name} className="grid grid-cols-[1fr_auto_7rem] items-center gap-x-3 py-1">
-            <span className="min-w-0 truncate">{person.name}</span>
-            <span className={`${AMOUNT_CLASS} font-medium`}>{formatWholeKronor(person.total)}</span>
-            {person.name === payment.payee ? (
-              <span className="text-sm text-gray-500">Får betalt</span>
-            ) : (
-              <SwishButton href={swishPaymentLink(payment.swishNumber, person.total, payment.message)} />
-            )}
-          </li>
-        ))}
-      </ul>
-      <DriftLine receipt={receipt} split={split} />
+    <div className="pt-2">
+      <div className={LINE_CLASS}>
+        <span className="min-w-0 truncate">Att betala till {payment.payee}</span>
+        <span className={`${AMOUNT_CLASS} font-medium`}>{formatWholeKronor(total)}</span>
+      </div>
+      <div className="flex justify-end pt-1">
+        <SwishButton href={swishPaymentLink(payment.swishNumber, total, payment.message)} />
+      </div>
     </div>
   );
 }

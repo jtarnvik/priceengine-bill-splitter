@@ -1,11 +1,15 @@
+import { useState } from 'react';
+
+import { ChoosePersonDialog } from '../components/choose-person-dialog';
 import { Card } from '../components/common/card';
 import { View } from '../components/common/view';
-import { ReceiptList } from '../components/receipt-list';
-import { ADJUSTMENT_SHARE_LABEL, SplitPayment, SplitPeople, SplitTotals } from '../components/split';
+import { ReceiptList, SumWarning } from '../components/receipt-list';
+import { ADJUSTMENT_SHARE_LABEL, SplitPeople, SplitTotals, YourPayment } from '../components/split';
 import { Receipt } from '../communication/api/generated-api';
 import { useGetLiveStateQuery } from '../communication/api/live-api';
 import { useDelayedFlag } from '../hook/use-delayed-flag';
 import { useGreeting } from '../hook/use-greeting';
+import { useMe } from '../hook/use-me';
 import { Split } from '../types/live';
 
 /**
@@ -41,22 +45,48 @@ export function PublicPage() {
  */
 function PublicReceipt({ receipt, split }: { receipt: Receipt, split: Split | null }) {
   const greet = useGreeting(receipt.receiptId);
+  const me = useMe(receipt.receiptId);
+  const [choosingAgain, setChoosingAgain] = useState(false);
+
+  function handleChoose(name: string) {
+    me.choose(name);
+    setChoosingAgain(false);
+  }
 
   return (
     <>
       <Card>
         <h2 className="pt-2 pb-1 text-lg font-medium break-words">{receipt.restaurantName}</h2>
-        {/* Done, the totals become the payment card, where each friend already looks for their sum. */}
-        {split?.payment && <SplitPayment receipt={receipt} split={split} payment={split.payment} />}
-        {split && !split.payment && <SplitTotals receipt={receipt} split={split} />}
+        {split && <SplitTotals receipt={receipt} split={split} me={me.name} onChangeMe={() => setChoosingAgain(true)} />}
       </Card>
       <Card>
-        <LeftToSplit receipt={receipt} split={split} greet={greet} />
+        {/*
+          The same minimum height whether it shows "Allt är fördelat" or, once done, the reader's own Swish button, so
+          that pressing "Klar" moves nothing below it.
+        */}
+        <div className="min-h-24">
+          {split?.payment && me.name ? (
+            <div className="pb-2">
+              <YourPayment split={split} payment={split.payment} me={me.name} />
+              <SumWarning receipt={receipt} />
+            </div>
+          ) : (
+            <LeftToSplit receipt={receipt} split={split} greet={greet} />
+          )}
+        </div>
       </Card>
       {split && (
         <Card>
           <SplitPeople receipt={receipt} split={split} />
         </Card>
+      )}
+      {/* Once the names have come with the split: asked once per receipt (see useMe), and again on a tap on the name. */}
+      {split && (!me.name || choosingAgain) && (
+        <ChoosePersonDialog
+          names={split.people.map((person) => person.name)}
+          suggested={me.name ?? me.previousName}
+          onChoose={handleChoose}
+        />
       )}
     </>
   );
