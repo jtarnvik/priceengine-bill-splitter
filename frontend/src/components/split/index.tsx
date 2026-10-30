@@ -92,10 +92,12 @@ function SwishButton({ href }: { href: string }) {
       className="flex shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50"
     >
       {/*
-        The stacked logo, symbol over wordmark, suits a tall button. Sized to leave room above and below it in the
-        card's height (2026-10-30: at h-12 it filled the button with no margin and looked cramped).
+        The stacked logo, symbol over wordmark, suits a tall button, sized to leave room above and below it.
+        Both sides given and never flexed: on the iPhone (WebKit) the logo touched the button's top edge where Chrome
+        showed a margin — WebKit sizes an SVG without an intrinsic size its own way, and the overflow of centred
+        contents goes up as much as down. The SVG file now carries width and height for the same reason.
       */}
-      <img src={swishLogo} alt="" className="h-11 w-auto" />
+      <img src={swishLogo} alt="" width={420} height={566} className="h-11 w-[2.04rem] shrink-0" />
       Betala
     </a>
   );
