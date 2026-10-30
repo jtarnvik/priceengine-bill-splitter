@@ -698,8 +698,8 @@ the names in one field, comma separated; who gets paid, among them; and the pars
 reset, and later corrections. It draws the receipt from the stream like the public page, so a reload mid-dinner
 keeps it.
 - **Without a receipt:** one large, rounded, green button in the iOS manner, with a camera icon (see In the
-  browser, before upload), and under it, small and grey, which parser answers. While the parse runs it says "Läser kvittot…" and cannot be tapped; a failure shows a
-  message in Swedish and the button again.
+  browser, before upload), and under it, small and grey, which parser answers. While the parse runs it says "Läser
+  kvittot…" and cannot be tapped; a failure shows a message in Swedish and the button again.
 - **With a receipt:** the restaurant, the rows, and a footer — "Totalt" and, from phase 6, "Kvar att dela på",
   which falls as items are ticked. Then (phase 7) "Klar", enabled once nothing is left, and while done "Ångra klar"
   with the boxes disabled. Then "Återställ", asking first in a `<dialog>` styled like the app. On canned receipts
