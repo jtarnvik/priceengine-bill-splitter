@@ -64,9 +64,10 @@ function PublicReceipt({ receipt, split }: { receipt: Receipt, split: Split | nu
           The same minimum height whether it shows "Allt är fördelat" or, once done, the reader's own Swish button, so
           that pressing "Klar" moves nothing below it.
         */}
-        <div className="min-h-24">
+        <div className="flex min-h-24 flex-col">
           {split?.payment && me.name ? (
-            <div className="pb-2">
+            // A column, so that the payment fills the card's height and its button can be as tall.
+            <div className="flex flex-1 flex-col pb-2">
               <YourPayment split={split} payment={split.payment} me={me.name} />
               <SumWarning receipt={receipt} />
             </div>

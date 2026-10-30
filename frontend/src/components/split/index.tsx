@@ -63,20 +63,19 @@ type YourPaymentProps = {
 export function YourPayment({ split, payment, me }: YourPaymentProps) {
   const total = split.people.find((person) => person.name === me)?.total ?? 0;
   if (me === payment.payee) {
-    return <p className="pt-2">Du får betalt.</p>;
+    return <p className="flex flex-1 items-center py-2">Du får betalt.</p>;
   }
   if (total <= 0) {
-    return <p className="pt-2">Du har inget att betala.</p>;
+    return <p className="flex flex-1 items-center py-2">Du har inget att betala.</p>;
   }
+  // The text on the left, and the button as tall as the card on the right (2026-10-30: more prominent).
   return (
-    <div className="pt-2">
-      <div className={LINE_CLASS}>
-        <span className="min-w-0 truncate">Att betala till {payment.payee}</span>
-        <span className={`${AMOUNT_CLASS} font-medium`}>{formatWholeKronor(total)}</span>
+    <div className="flex flex-1 items-stretch gap-3 py-2">
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <span className="truncate text-sm text-gray-600">Att betala till {payment.payee}</span>
+        <span className="text-2xl font-semibold tabular-nums">{formatWholeKronor(total)}</span>
       </div>
-      <div className="flex justify-end pt-1">
-        <SwishButton href={swishPaymentLink(payment.swishNumber, total, payment.message)} />
-      </div>
+      <SwishButton href={swishPaymentLink(payment.swishNumber, total, payment.message)} />
     </div>
   );
 }
@@ -90,9 +89,10 @@ function SwishButton({ href }: { href: string }) {
     <a
       href={href}
       aria-label="Betala med Swish"
-      className="flex h-10 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+      className="flex shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50"
     >
-      <img src={swishLogo} alt="" className="h-8 w-auto" />
+      {/* The stacked logo, symbol over wordmark, suits a tall button. */}
+      <img src={swishLogo} alt="" className="h-12 w-auto" />
       Betala
     </a>
   );

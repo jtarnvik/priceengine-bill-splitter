@@ -50,7 +50,7 @@ but last (phase 10).
 
 ## Status
 
-**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.8` runs on
+**Phases 1 to 6 done (2026-10-25 to 2026-10-29); phase 7 in progress (planned 2026-10-29).** pbs `v0.6.9` runs on
 the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored by UptimeRobot, its log collected by
 the log-retention stack. The owner logs in with Google, photographs a receipt and sees its rows, with a warning when
 they do not add up to the total; the owner ticks who had what; every open page follows live, and the public page
@@ -657,10 +657,11 @@ stack, so its files are the reference (see Reference implementations).
   the table they are, one button per name, and cannot be closed without choosing. Not a login, nothing is checked —
   we are all friends. Kept in `localStorage` with the receipt's id (`use-me.ts`): a reload, a reconnect or an
   unlocked phone does not ask again for the same receipt, the next one does, last time's name marked. The chosen
-  name is bold in the totals card; a tap on it asks again, should the wrong name have been tapped.
+  name is bold in the totals card; a tap on it asks again, should the wrong name have been tapped. The dialog is
+  in the header's green with the names on white buttons (in white it looked colourless).
 - **When the split is done, each reader gets their own Swish button** (decided 2026-10-30, replacing four buttons
-  in the totals card): "Att betala till <payee>", the reader's total and the button, in the card where the items
-  left to split were. That card keeps the same minimum height whether it shows "Allt är fördelat" or the button,
+  in the totals card): "Att betala till <payee>" and the reader's total on the left, and on the right a white
+  button with the stacked Swish logo, as tall as the card, in the card where the items left to split were. That card keeps the same minimum height whether it shows "Allt är fördelat" or the button,
   and the totals card does not change at all, so pressing "Klar" moves nothing. The payee sees "Du får betalt", a
   reader with nothing to pay "Du har inget att betala". *Why `pbs.payee` is still needed:* a payee who chooses
   their own name would otherwise get a button to pay themselves, which Swish refuses as "felaktigt format", and
