@@ -58,7 +58,8 @@ and sees its rows, with a warning when they do not add up to the total; the owne
 expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
 settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. Step 9.3
 is verified on a phone: deploying `v0.7.4` reloaded a page left open on `v0.7.3` by itself (the wait for an open
-dialog is covered by its code, not yet tried on a phone). `v0.7.5` carries step 9.4, the larger tap targets.
+dialog is covered by its code, not yet tried on a phone). Step 9.4, the larger tap targets and the greying, is verified on a phone
+(`v0.7.5`).
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -955,7 +956,7 @@ Verify:
    not committed, `mvn verify`, the new jar started): the page reloads by itself once the stream reconnects.
 3. With "Vem är du?" or the settings dialog open, it waits until it is closed.
 
-**9.4 Polish** — Claude, from the owner's list (T9)
+**9.4 Polish** — Claude, from the owner's list (T9) ✅
 - **Tap targets at least 44 px**, the least Apple recommends: the checkbox labels (32 px before, and what is tapped
   most), the menu items (36), the buttons on the owner's page and in the dialogs (40).
 - **The greying of a ticked row**, judged by the owner on the phone with the above; adjusted if needed.
