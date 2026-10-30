@@ -1,7 +1,7 @@
 import { pbsApi } from './base-api';
 import { generatedApi } from './generated-api';
 import type { Receipt } from './generated-api';
-import { ConnectionStatus, LiveState, ReceiptEvent, Split } from '../../types/live';
+import { ConnectionStatus, LiveState, ReceiptEvent, Split, VersionEvent } from '../../types/live';
 
 const EVENTS_URL = '/api/public/events';
 const FIRST_RETRY_DELAY_MS = 2_000;
@@ -28,6 +28,12 @@ const MAX_RETRY_DELAY_MS = 30_000;
  * A receipt with another id drops the split held for the previous one, whose ticks would otherwise land on the new
  * receipt's rows by item id; the new receipt's own `split` event follows at once.
  */
+/**
+ * The server's version when this page was loaded, from the first `version` event. Kept for the page's life, outside
+ * the cache entry, which can be dropped and made anew while the page lives.
+ */
+let pageVersion: string | null = null;
+
 export function setReceipt(draft: LiveState, receipt: Receipt | null) {
   if (draft.receipt?.receiptId !== receipt?.receiptId) {
     draft.split = null;
@@ -38,7 +44,7 @@ export function setReceipt(draft: LiveState, receipt: Receipt | null) {
 export const liveApi = pbsApi.injectEndpoints({
   endpoints: (build) => ({
     getLiveState: build.query<LiveState, void>({
-      queryFn: () => ({ data: { receipt: undefined, split: null, status: 'connecting' } }),
+      queryFn: () => ({ data: { receipt: undefined, split: null, newVersion: null, status: 'connecting' } }),
       async onCacheEntryAdded(_arg, { updateCachedData, cacheDataLoaded, cacheEntryRemoved, dispatch }) {
         await cacheDataLoaded;
 
@@ -69,6 +75,17 @@ export const liveApi = pbsApi.injectEndpoints({
             }
             hasOpened = true;
           };
+          source.addEventListener('version', (event) => {
+            const payload = JSON.parse(event.data) as VersionEvent;
+            if (pageVersion === null) {
+              pageVersion = payload.version;
+            } else if (payload.version !== pageVersion) {
+              // A deploy since this page was loaded: it runs the old app against a new server.
+              updateCachedData((draft) => {
+                draft.newVersion = payload.version;
+              });
+            }
+          });
           source.addEventListener('receipt', (event) => {
             const payload = JSON.parse(event.data) as ReceiptEvent;
             updateCachedData((draft) => {

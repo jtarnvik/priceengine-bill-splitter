@@ -8,6 +8,7 @@ import com.tarnvik.pbs.port.outgoing.sse.EventStreamProvider;
 import com.tarnvik.pbs.service.ReceiptService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
@@ -43,10 +44,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class EventsControllerTest {
   @Autowired MockMvc mockMvc;
   @MockitoBean ReceiptService receiptService;
+  @Value("${pbs.version}") String version;
 
-  /** Even with no receipt: a phone locked through a reset would otherwise reconnect to silence and keep the old one. */
+  /**
+   * The version first, then the receipt even when there is none: a phone locked through a reset would otherwise
+   * reconnect to silence and keep the old one.
+   */
   @Test
-  void events_noReceipt_sendsNullReceiptAndNothingElse() throws Exception {
+  void events_noReceipt_sendsTheVersionAndNullReceiptAndNothingElse() throws Exception {
     when(receiptService.currentState()).thenReturn(Optional.empty());
 
     MvcResult result = mockMvc.perform(get("/api/public/events"))
@@ -55,8 +60,10 @@ class EventsControllerTest {
       .andReturn();
 
     assertThat(result.getResponse().getContentType()).startsWith("text/event-stream");
-    // Phase 2's viewer count is gone: the receipt is the whole of the state.
-    assertThat(result.getResponse().getContentAsString()).isEqualTo("event:receipt\ndata:{\"receipt\":null}\n\n");
+    // Maven filled it in: an unfiltered @project.version@ would reach the pages as it is.
+    assertThat(version).doesNotContain("@");
+    assertThat(result.getResponse().getContentAsString()).isEqualTo(
+      "event:version\ndata:{\"version\":\"" + version + "\"}\n\nevent:receipt\ndata:{\"receipt\":null}\n\n");
   }
 
   /** The receipt first, then who had what: the page needs the rows before it can place the ticks. */
@@ -72,8 +79,9 @@ class EventsControllerTest {
     MvcResult result = mockMvc.perform(get("/api/public/events")).andReturn();
 
     String stream = result.getResponse().getContentAsString();
-    assertThat(stream).startsWith(
-      "event:receipt\ndata:{\"receipt\":{\"receiptId\":\"" + receipt.receiptId() + "\",\"restaurantName\":\"Trattoria\"");
+    assertThat(stream).startsWith("event:version\n").contains(
+      "\n\nevent:receipt\ndata:{\"receipt\":{\"receiptId\":\"" + receipt.receiptId() + "\",\"restaurantName\":\"Trattoria\"");
+    assertThat(stream.indexOf("event:receipt")).isLessThan(stream.indexOf("event:split"));
     assertThat(stream).contains("\n\nevent:split\ndata:{\"receiptId\":\"" + receipt.receiptId()
       + "\",\"items\":[{\"id\":1,\"people\":[\"Anna\"]}]");
   }

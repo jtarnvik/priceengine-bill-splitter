@@ -51,12 +51,13 @@ but last (phase 10).
 ## Status
 
 **Phases 1 to 7 done (2026-10-25 to 2026-10-30); phase 9 in progress (planned 2026-10-30)** — phase 8 moved after
-1.0 as phase 11. pbs `v0.7.2` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
+1.0 as phase 11. pbs `v0.7.3` runs on the Mini at `https://pbs.tarnvik.com`, behind Cloudflare and Caddy, monitored
 by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
 expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
-settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast.
+settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. `v0.7.3`
+carries step 9.3, reloading a page on a new version.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
@@ -573,6 +574,10 @@ every reconnect. Here the whole state is a few hundred bytes, so each event carr
   nothing on the phone ever fetches, and the response starts at once rather than idling towards Cloudflare's
   100 s limit. *Why `receipt` even when empty:* a phone locked through a reset would otherwise reconnect to
   silence and keep showing the old receipt.
+- **`version` comes first on every connect** (phase 9): the server's build. A page keeps the version of its first
+  connect, outside the cache entry; a later connect announcing another one reloads the page, once no dialog is open
+  and no request is under way. *Why:* pbs is one page that never reloads, and the stream reconnects without
+  reloading, so after a deploy an open page would run the old app against the new server.
 - **Keep the heartbeat** (`: ping` every 20 s), for Cloudflare's idle timeout.
 - **Phones lock their screens mid-dinner.** iOS suspends the page and the connection dies; overlord's
   `live-updates.tsx` already notes that iOS can give up for good (`readyState` stuck at `CLOSED`). On
@@ -903,8 +908,9 @@ owner the same day, and move into the design as the steps are done.
   `application.properties`; the overrides in `local` and `production` go.
 - **T8. The version as an event:** `event: version` with the build's version, the first event on every connect. A
   page keeps the version of its first connect; a later connect announcing another one reloads the page — at once
-  if nothing is in progress, otherwise once the dialog closes or the upload ends. The version comes from Spring
-  Boot's build info (`build-info` in the pom), not from the frontend's build.
+  if nothing is in progress, otherwise once the dialog closes or the upload ends. The version comes from the
+  server's build: `pbs.version=@project.version@`, filled in by Maven (in place of `build-info` as first planned:
+  the Spring Boot parent pom already filters `application*.properties`, so no plugin goal is needed).
 - **T9. The polish is a list the owner gathers**, worked through in one step at the end, each item small: the
   greying, what 375 px shows, tap targets, empty states.
 
@@ -939,8 +945,8 @@ Verify, logged in, at 375 px:
 4. Switching the parser changes the line under the upload button, and the next upload uses it.
 
 **9.3 Reload on a new version** — Claude
-- `build-info` in the pom; `event: version` first on every connect (T8); the page keeps its first version and
-  reloads on another, waiting for a dialog or an upload in progress.
+- `pbs.version=@project.version@`; `event: version` first on every connect (T8); the page keeps its first version
+  and reloads on another, waiting while a dialog is open or a request is under way (`use-reload-on-new-version.ts`).
 
 Verify:
 1. `curl -sN localhost:8082/api/public/events` starts with `event:version` and the pom's version.

@@ -4,7 +4,9 @@ import com.tarnvik.pbs.model.Receipt;
 import com.tarnvik.pbs.model.ReceiptState;
 import com.tarnvik.pbs.model.Split;
 import com.tarnvik.pbs.port.incoming.rest.dto.ReceiptEvent;
+import com.tarnvik.pbs.port.incoming.rest.dto.VersionEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
@@ -23,8 +25,8 @@ import java.util.function.Supplier;
  * carries the whole state rather than a "something changed" signal (see Live updates in CLAUDE.md).
  *
  * <p>A new page gets the current state as its first events, so that a reconnect is indistinguishable from a first
- * connect: {@code receipt} always, {@code {"receipt": null}} when there is none, then {@code split} when there is a
- * receipt.
+ * connect: {@code version} first, then {@code receipt} always, {@code {"receipt": null}} when there is none, then
+ * {@code split} when there is a receipt.
  *
  * <p>The number of connected pages is logged at debug on every connect and disconnect; phase 2 broadcast it as a
  * dummy event, and phase 10's terminal dashboard may show it.
@@ -34,10 +36,16 @@ import java.util.function.Supplier;
 public class EventStreamProvider {
   // Long-lived stream; the browser's EventSource reconnects by itself whenever it is closed.
   private static final long EMITTER_TIMEOUT_MILLIS = Duration.ofHours(24).toMillis();
+  private static final String VERSION_EVENT = "version";
   private static final String RECEIPT_EVENT = "receipt";
   private static final String SPLIT_EVENT = "split";
 
   private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+  private final String version;
+
+  public EventStreamProvider(@Value("${pbs.version}") String version) {
+    this.version = version;
+  }
 
   /**
    * Registers a new page and sends it the current state, receipt and split from one snapshot. The returned emitter
@@ -58,6 +66,7 @@ public class EventStreamProvider {
     emitter.onError(e -> remove(emitter));
     emitters.add(emitter);
     log.debug("SSE client connected, {} active connection(s)", emitters.size());
+    send(emitter, SseEmitter.event().name(VERSION_EVENT).data(new VersionEvent(version), MediaType.APPLICATION_JSON));
     Optional<ReceiptState> state = currentState.get();
     send(emitter, receiptEvent(state.map(ReceiptState::receipt).orElse(null)));
     state.ifPresent(present -> send(emitter, splitEvent(present.split())));

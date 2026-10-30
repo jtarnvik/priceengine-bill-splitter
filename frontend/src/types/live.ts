@@ -6,6 +6,11 @@ import type { Receipt } from '../communication/api/generated-api';
  * the upload answers with the same one.
  */
 
+/** `event: version` — the server's build, the first event on every connect. Matches VersionEvent in Java. */
+export interface VersionEvent {
+  version: string
+}
+
 /** `event: receipt` — the whole receipt after an upload, `null` after a reset. Matches ReceiptEvent in Java. */
 export interface ReceiptEvent {
   receipt: Receipt | null
@@ -59,5 +64,7 @@ export interface LiveState {
   receipt: Receipt | null | undefined,
   /** The split of `receipt`, `null` until its `split` event; never one of another receipt. */
   split: Split | null,
+  /** A server version other than the one this page started with: the page should reload. `null` while they match. */
+  newVersion: string | null,
   status: ConnectionStatus
 }
