@@ -55,11 +55,10 @@ but last (phase 10).
 by UptimeRobot, its log collected by the log-retention stack. The owner logs in with Google, photographs a receipt
 and sees its rows, with a warning when they do not add up to the total; the owner ticks who had what and presses
 "Klar"; every open page follows live, each reader says who they are and gets their own Swish button, and the receipt
-expires 30 minutes after its last change. Steps 9.1 and 9.2 are verified on a phone: the owner's
-settings — names, payee, parser — in a dialog; `v0.7.2` also fixes a failed send breaking off a broadcast. Step 9.3
-is verified on a phone: deploying `v0.7.4` reloaded a page left open on `v0.7.3` by itself (the wait for an open
-dialog is covered by its code, not yet tried on a phone). Step 9.4, the larger tap targets and the greying, is verified on a phone
-(`v0.7.5`).
+expires 30 minutes after its last change. Steps 9.1 to 9.4 are verified on a phone: the owner's settings — names,
+payee, parser — in a dialog; a page left open reloading itself on a new version (deploying `v0.7.4` reloaded one
+left on `v0.7.3`; the wait for an open dialog is covered by its code, not yet tried on a phone); and tap targets of
+44 px. `v0.7.2` also fixed a failed send breaking off a broadcast.
 
 **Production runs the canned parser** (`pbs.receipt-parser=canned` in `application-production.properties`, from
 `v0.4.1`, 2026-10-29), answering uploads with the recordings in `deployment/recordings/` at no cost; phases 5 and 6
